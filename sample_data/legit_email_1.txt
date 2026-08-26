@@ -1,0 +1,14 @@
+From: "Amara Okonkwo" <amara.okonkwo@amdari.io>
+Reply-To: amara.okonkwo@amdari.io
+Subject: Notes from today's SOC handover
+Authentication-Results: mx.example.com; spf=pass smtp.mailfrom=amdari.io; dkim=pass; dmarc=pass
+
+Hi Leonard,
+
+Quick summary from today's handover — nothing urgent, just wanted it in
+writing before end of shift. The Sentinel alert volume was normal, no open
+incidents to carry over.
+
+See you tomorrow.
+
+Amara

@@ -1,0 +1,17 @@
+From: "PayPal Support" <security@paypa1-alerts.top>
+Reply-To: recovery@mail-response-center.ru
+Subject: Unusual activity on your account
+Authentication-Results: mx.example.com; spf=fail smtp.mailfrom=paypa1-alerts.top; dkim=fail; dmarc=fail
+
+Dear Customer,
+
+We noticed unusual activity on your account. For your protection, your
+account will be suspended within 24 hours unless you verify your identity.
+
+Please confirm your account immediately by clicking the link below:
+
+https://paypa1-secure-login.top/verify?session=8213
+
+Failure to act now will result in permanent suspension.
+
+PayPal Security Team
