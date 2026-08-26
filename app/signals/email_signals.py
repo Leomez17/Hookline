@@ -34,6 +34,40 @@ def _domain_of(address: str) -> str:
     return address.rsplit("@", 1)[-1].lower() if "@" in address else ""
 
 
+def _get_body(msg, raw_fallback: str) -> str:
+    body = raw_fallback
+    if msg.is_multipart():
+        parts = []
+        for part in msg.walk():
+            if part.get_content_type() == "text/plain":
+                try:
+                    parts.append(part.get_payload(decode=True).decode(errors="ignore"))
+                except Exception:
+                    pass
+        if parts:
+            body = "\n".join(parts)
+    else:
+        payload = msg.get_payload(decode=True)
+        if payload:
+            try:
+                body = payload.decode(errors="ignore")
+            except Exception:
+                body = raw_fallback
+    return body
+
+
+def extract_links(raw_email: str, limit: int = 5) -> List[str]:
+    """Every link in the email body, in order, capped at `limit`. Shared by
+    extract_email_features (for local URL signal checks) and by the
+    scoring layer (to target a bounded number of links at threat-intel
+    lookups, so one email can't fan out into unlimited API calls).
+    """
+    text = raw_email or ""
+    msg = message_from_string(text)
+    body = _get_body(msg, text)
+    return URL_RE.findall(body)[:limit]
+
+
 def extract_email_features(raw_email: str) -> List[Finding]:
     findings: List[Finding] = []
     text = raw_email or ""
@@ -84,24 +118,7 @@ def extract_email_features(raw_email: str) -> List[Finding]:
             "points": 0,
         })
 
-    body = text
-    if msg.is_multipart():
-        parts = []
-        for part in msg.walk():
-            if part.get_content_type() == "text/plain":
-                try:
-                    parts.append(part.get_payload(decode=True).decode(errors="ignore"))
-                except Exception:
-                    pass
-        if parts:
-            body = "\n".join(parts)
-    else:
-        payload = msg.get_payload(decode=True)
-        if payload:
-            try:
-                body = payload.decode(errors="ignore")
-            except Exception:
-                body = text
+    body = _get_body(msg, text)
 
     lowered_body = body.lower()
     matched_phrases = [p for p in URGENT_PHRASES if p in lowered_body]
@@ -114,8 +131,8 @@ def extract_email_features(raw_email: str) -> List[Finding]:
             "points": points,
         })
 
-    urls = URL_RE.findall(body)
-    for url in urls[:5]:
+    urls = URL_RE.findall(body)[:5]
+    for url in urls:
         for f in extract_url_features(url):
             f = dict(f)
             f["signal"] = f"link:{f['signal']}"

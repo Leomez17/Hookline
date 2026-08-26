@@ -2,19 +2,26 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.models import CheckRequest, CheckResponse
-from app.scoring import run_check
+# Must run before anything reads GOOGLE_SAFE_BROWSING_API_KEY / VIRUSTOTAL_API_KEY /
+# PHISHTANK_API_KEY from the environment — those are read lazily per-request
+# (see app/threat_intel/provider.py), but .env needs to be loaded into the
+# process environment once, here, at startup.
+load_dotenv()
+
+from app.models import CheckRequest, CheckResponse  # noqa: E402
+from app.scoring import run_check  # noqa: E402
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 app = FastAPI(
     title="Hookline",
-    description="Phishing & suspicious-link detector — Week 1 spike (rules-only, no external APIs).",
-    version="0.1.0",
+    description="Phishing & suspicious-link detector — rules engine + threat-intel lookups (Google Safe Browsing, VirusTotal, PhishTank).",
+    version="0.2.0",
 )
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
