@@ -1,11 +1,13 @@
-# Hookline — Week 4
+# Hookline — Week 5
 
 A phishing & suspicious-link detector. Built from the
 [concept brief](https://claude.ai/code/artifact/9f00a0bf-5b9d-4843-a4da-88be7553a89f):
 Week 1 proved the architecture rules-only, Week 2 added real threat-intel
 lookups, Week 3 added live domain-age/TLS enrichment plus an explainable
-logistic-regression calibration layer, and Week 4 adds attachment
-parsing — finally earning the T1566.001 MITRE tag honestly.
+logistic-regression calibration layer, Week 4 added attachment
+parsing — finally earning the T1566.001 MITRE tag honestly — and Week 5
+packages the whole thing as a browser extension so a check is a click or a
+right-click away, instead of copy-pasting into the demo UI.
 
 Paste a URL or a raw email (headers + body) and get back a 0–100 score, a
 plain verdict (`safe` / `suspicious` / `malicious`), the specific evidence
@@ -111,6 +113,14 @@ that produced it, and a MITRE ATT&CK tag.
   enrichment/ML findings), and T1598 (Phishing for Information).
 - **Demo UI** (`static/index.html`) — a single page that hits `/check` and
   renders the verdict card, MITRE tags, and evidence list.
+- **Browser extension** (`extension/`) — a Manifest V3 Chrome/Edge
+  extension: toolbar popup to check the current page, right-click menu to
+  check any page or link, desktop notifications, and a badge showing the
+  score. Talks to your own running Hookline instance (local by default,
+  configurable in its settings page) — see `extension/README.md` for
+  install steps and details. The API now sends permissive CORS headers
+  (`app/main.py`) to support this and other cross-origin uses, such as
+  poking `/check` from a browser console.
 
 ## Setting up API keys and live enrichment
 
@@ -176,7 +186,7 @@ suite and handy for manually poking the UI.
 pytest -v
 ```
 
-70 tests. Threat-intel tests mock `requests` directly; enrichment tests
+73 tests. Threat-intel tests mock `requests` directly; enrichment tests
 mock `requests` (RDAP) and `socket`/`ssl` (TLS) the same way, including a
 dedicated test that the TLS client's SSRF guard actually refuses to
 connect when a host resolves only to a private address. Attachment tests
@@ -185,7 +195,14 @@ build real MIME multipart messages with Python's own `email.mime` helpers
 this repo) and round-trip them through the same parser the app uses. None
 of these make a real network call, so the suite is safe and fast to run
 with or without API keys or `ENABLE_LIVE_ENRICHMENT` set, and can't
-accidentally burn your quota or probe a live host.
+accidentally burn your quota or probe a live host. `tests/test_main.py`
+covers the CORS middleware directly, using FastAPI's `TestClient`.
+
+The extension itself has no `pytest`-style suite (there isn't an
+equivalent harness for a Manifest V3 extension in this project), but it's
+been smoke-tested end-to-end — service worker startup, settings
+save/reload, and a real check against a running Hookline server, all
+through the extension's own code — see `extension/README.md`.
 
 ## Project layout
 
@@ -223,6 +240,7 @@ scripts/
   train_model.py        Dev-only: regenerates app/ml/weights.json (needs scikit-learn)
 static/
   index.html           Demo UI
+extension/             Browser extension (Week 5) — see extension/README.md
 tests/                 pytest suite
 sample_data/           Sample phishing (link + attachment) + legitimate emails
 ```
@@ -239,7 +257,10 @@ sample_data/           Sample phishing (link + attachment) + legitimate emails
 4. ~~Attachment parsing, to finally earn the T1566.001 tag honestly.~~
    **Done — Week 4** (metadata-only — see above for exactly what that
    does and doesn't cover).
-5. Package as a browser extension / Outlook add-in, and a webhook into
-   Sentinel reusing the existing Logic App playbook pattern.
+5. ~~Package as a browser extension.~~ **Done — Week 5** (Chrome/Edge,
+   Manifest V3 — see `extension/README.md`). An Outlook add-in and a
+   webhook into Sentinel (reusing the existing Logic App playbook pattern)
+   are still open, for whenever this needs to live somewhere other than a
+   browser.
 6. The usual deliverable suite — GitHub README (this doubles as a start),
    technical write-up, portfolio HTML page, LinkedIn post.

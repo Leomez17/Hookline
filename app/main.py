@@ -4,6 +4,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -27,7 +28,21 @@ app = FastAPI(
         "enrichment + an explainable logistic-regression calibration layer + "
         "attachment parsing (metadata-only)."
     ),
-    version="0.4.0",
+    version="0.5.0",
+)
+
+# Hookline is meant to run locally next to whatever is checking against it —
+# the demo UI (same-origin, doesn't need this), the browser extension
+# (already bypasses CORS via its granted host_permissions), or you, poking
+# the API from a browser console or a script on a different port. There's no
+# session/cookie auth here for a permissive origin list to put at risk, so
+# allow_origins=["*"] is fine for a tool that's designed to run on your own
+# machine. Tighten this before ever exposing an instance publicly.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
 )
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

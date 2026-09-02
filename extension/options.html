@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hookline settings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fjalla+One&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f1f3f5; --paper-raised: #e7ebee; --ink: #1b2430; --ink-soft: #4b5563;
+    --line: #d3d8de; --accent: #2d6e8e; --good: #3f7a5c; --critical: #a3403a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12161c; --paper-raised: #1a2029; --ink: #e7eaee; --ink-soft: #a6adb8;
+      --line: #2a323c; --accent: #7bbdd9; --good: #8fcaa9; --critical: #e0918b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  }
+  main { max-width: 480px; margin: 0 auto; padding: 40px 24px; }
+  h1 { font-family: "Fjalla One", sans-serif; font-weight: 400; font-size: 28px; margin: 0 0 6px; }
+  p.sub { color: var(--ink-soft); margin: 0 0 24px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  input[type="text"] {
+    width: 100%; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px;
+    padding: 9px 10px; border: 1px solid var(--line); border-radius: 3px;
+    background: var(--paper-raised); color: var(--ink);
+  }
+  .hint { font-size: 12px; color: var(--ink-soft); margin-top: 6px; }
+  button {
+    margin-top: 16px; font-family: "Public Sans", sans-serif; font-weight: 600; font-size: 14px;
+    background: var(--accent); color: var(--paper); border: none; border-radius: 3px;
+    padding: 9px 16px; cursor: pointer;
+  }
+  button:hover { opacity: .92; }
+  .status { margin-top: 12px; font-size: 13px; display: none; padding: 8px 10px; border-radius: 3px; }
+  .status.ok { display: block; color: var(--good); background: color-mix(in srgb, var(--good) 15%, transparent); }
+  .status.err { display: block; color: var(--critical); background: color-mix(in srgb, var(--critical) 15%, transparent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Hookline settings</h1>
+  <p class="sub">Where the extension sends checks. Defaults to a Hookline API running locally.</p>
+
+  <label for="api-base">API base URL</label>
+  <input type="text" id="api-base" placeholder="http://127.0.0.1:8000">
+  <div class="hint">
+    Run <code>uvicorn app.main:app --reload</code> in your Hookline project folder, and this should
+    just work. Pointing this at a non-default address (a different port, or a deployed instance)
+    will ask you to grant the extension permission to reach that address.
+  </div>
+
+  <button id="save-btn">Save</button>
+  <div class="status" id="status"></div>
+</main>
+<script type="module" src="options.js"></script>
+</body>
+</html>
