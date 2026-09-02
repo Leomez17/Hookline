@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=Edge">
+<title>Hookline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fjalla+One&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Required to talk to the host Outlook client (Office.context.mailbox, roamingSettings, etc). -->
+<script src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js" type="text/javascript"></script>
+<style>
+  :root {
+    --paper: #f1f3f5;
+    --paper-raised: #e7ebee;
+    --ink: #1b2430;
+    --ink-soft: #4b5563;
+    --line: #d3d8de;
+    --accent: #2d6e8e;
+    --accent-soft: #dde9ee;
+    --amber: #9c6a1f;
+    --amber-soft: #f3e6d1;
+    --critical: #a3403a;
+    --critical-soft: #f3ddda;
+    --good: #3f7a5c;
+    --good-soft: #dcece3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12161c;
+      --paper-raised: #1a2029;
+      --ink: #e7eaee;
+      --ink-soft: #a6adb8;
+      --line: #2a323c;
+      --accent: #7bbdd9;
+      --accent-soft: #1e3742;
+      --amber: #dba35c;
+      --amber-soft: #3a2c17;
+      --critical: #e0918b;
+      --critical-soft: #3a2321;
+      --good: #8fcaa9;
+      --good-soft: #1e3327;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.5;
+  }
+  main { padding: 16px 18px 24px; max-width: 480px; }
+
+  .header { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+  .header img { width: 22px; height: 22px; display: block; }
+  h1 {
+    font-family: "Fjalla One", sans-serif;
+    font-weight: 400;
+    font-size: 21px;
+    margin: 0;
+  }
+  .settings-link {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+  }
+  .settings-link:hover { color: var(--accent); }
+
+  .message-meta {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 9px 10px;
+    margin: 10px 0 12px;
+  }
+  .message-meta .from { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; word-break: break-all; }
+  .message-meta .subject { color: var(--ink); margin-top: 3px; }
+
+  #settings-panel {
+    display: none;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  #settings-panel label { font-size: 12px; color: var(--ink-soft); display: block; margin-bottom: 5px; }
+  #settings-panel input {
+    width: 100%;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  #settings-panel .row { display: flex; gap: 8px; margin-top: 9px; }
+  #settings-panel button {
+    font-family: "Public Sans", sans-serif;
+    font-size: 12.5px; font-weight: 600;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 3px;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  #settings-panel button#save-settings { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+  #settings-status { font-size: 11.5px; margin-top: 6px; }
+  #settings-status.ok { color: var(--good); }
+  #settings-status.err { color: var(--critical); }
+
+  button#check-btn {
+    width: 100%;
+    font-family: "Public Sans", sans-serif;
+    font-weight: 600; font-size: 14px;
+    background: var(--accent); color: var(--paper);
+    border: none; border-radius: 3px; padding: 10px;
+    cursor: pointer;
+  }
+  button#check-btn:hover { opacity: .92; }
+  button#check-btn:disabled { opacity: .5; cursor: default; }
+
+  #result { margin-top: 14px; display: none; }
+
+  .verdict-card {
+    display: flex; align-items: center; gap: 12px;
+    border: 1px solid var(--line); border-radius: 3px; padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .verdict-card.safe { background: var(--good-soft); border-color: var(--good); }
+  .verdict-card.suspicious { background: var(--amber-soft); border-color: var(--amber); }
+  .verdict-card.malicious { background: var(--critical-soft); border-color: var(--critical); }
+
+  .score {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums;
+    min-width: 44px;
+  }
+  .verdict-label {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600;
+  }
+
+  .mitre-row { display: flex; gap: 5px; flex-wrap: wrap; margin: 0 0 12px; }
+  .mitre-pill {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10.5px; padding: 2px 7px; border-radius: 2px;
+    background: var(--accent-soft); color: var(--accent);
+  }
+
+  #evidence-list { max-height: 320px; overflow-y: auto; }
+  .evidence-item {
+    padding: 9px 0; border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between; gap: 12px;
+  }
+  .evidence-item:first-child { border-top: none; }
+  .evidence-detail { font-size: 12.5px; }
+  .evidence-signal {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10px; color: var(--ink-soft); display: block; margin-top: 2px;
+  }
+  .evidence-points {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 12px; white-space: nowrap; color: var(--ink-soft);
+  }
+
+  .notes { margin-top: 10px; font-size: 12px; color: var(--ink-soft); }
+  .limitation-note {
+    font-size: 11.5px; color: var(--ink-soft); font-style: italic;
+    margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line);
+  }
+  .error {
+    margin-top: 12px; font-size: 12.5px; color: var(--critical);
+    background: var(--critical-soft); border: 1px solid var(--critical);
+    border-radius: 3px; padding: 10px; display: none;
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="header">
+    <img src="assets/icon-32.png" alt="">
+    <h1>Hookline</h1>
+    <button class="settings-link" id="settings-toggle" type="button">settings</button>
+  </div>
+
+  <div class="message-meta" id="message-meta">
+    <div class="from" id="message-from">—</div>
+    <div class="subject" id="message-subject"></div>
+  </div>
+
+  <div id="settings-panel">
+    <label for="api-base">Hookline API base URL</label>
+    <input id="api-base" type="text" placeholder="http://127.0.0.1:8000" />
+    <div class="row">
+      <button id="save-settings" type="button">Save</button>
+      <button id="cancel-settings" type="button">Cancel</button>
+    </div>
+    <div id="settings-status"></div>
+  </div>
+
+  <button id="check-btn">Check this email</button>
+
+  <div id="result">
+    <div class="verdict-card" id="verdict-card">
+      <div class="score" id="score">—</div>
+      <div>
+        <div class="verdict-label" id="verdict-label">—</div>
+        <div id="notes" class="notes" style="margin-top:0;"></div>
+      </div>
+    </div>
+    <div class="mitre-row" id="mitre-row"></div>
+    <div id="evidence-list"></div>
+    <div class="limitation-note" id="limitation-note" style="display:none;"></div>
+  </div>
+
+  <div class="error" id="error"></div>
+</main>
+<script type="module" src="taskpane.js"></script>
+</body>
+</html>

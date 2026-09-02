@@ -1,13 +1,14 @@
-# Hookline — Week 5
+# Hookline — Week 6
 
 A phishing & suspicious-link detector. Built from the
 [concept brief](https://claude.ai/code/artifact/9f00a0bf-5b9d-4843-a4da-88be7553a89f):
 Week 1 proved the architecture rules-only, Week 2 added real threat-intel
 lookups, Week 3 added live domain-age/TLS enrichment plus an explainable
 logistic-regression calibration layer, Week 4 added attachment
-parsing — finally earning the T1566.001 MITRE tag honestly — and Week 5
-packages the whole thing as a browser extension so a check is a click or a
-right-click away, instead of copy-pasting into the demo UI.
+parsing — finally earning the T1566.001 MITRE tag honestly — Week 5
+packaged the whole thing as a browser extension so a check is a click or a
+right-click away, and Week 6 adds an Outlook task pane add-in so a check
+runs right where phishing actually gets read.
 
 Paste a URL or a raw email (headers + body) and get back a 0–100 score, a
 plain verdict (`safe` / `suspicious` / `malicious`), the specific evidence
@@ -121,6 +122,14 @@ that produced it, and a MITRE ATT&CK tag.
   install steps and details. The API now sends permissive CORS headers
   (`app/main.py`) to support this and other cross-origin uses, such as
   poking `/check` from a browser console.
+- **Outlook add-in** (`outlook-addin/`) — a task pane add-in for reading
+  mail: opens next to the email you're viewing, reads its headers (when the
+  Outlook client provides them) and body via Office.js, and scores it
+  through the same `/check` endpoint. Unlike the browser extension, Outlook
+  requires every add-in asset to be served over HTTPS even during local
+  development, so this ships its own small Node HTTPS static server using
+  Microsoft's `office-addin-dev-certs` for a trusted local certificate —
+  see `outlook-addin/README.md` for setup and sideload steps.
 
 ## Setting up API keys and live enrichment
 
@@ -202,7 +211,10 @@ The extension itself has no `pytest`-style suite (there isn't an
 equivalent harness for a Manifest V3 extension in this project), but it's
 been smoke-tested end-to-end — service worker startup, settings
 save/reload, and a real check against a running Hookline server, all
-through the extension's own code — see `extension/README.md`.
+through the extension's own code — see `extension/README.md`. The Outlook
+add-in is the same situation, for the same reason (no practical way to
+script-test an Outlook host UI) — its manifest, HTTPS server, and task
+pane markup were validated directly instead — see `outlook-addin/README.md`.
 
 ## Project layout
 
@@ -241,6 +253,7 @@ scripts/
 static/
   index.html           Demo UI
 extension/             Browser extension (Week 5) — see extension/README.md
+outlook-addin/         Outlook task pane add-in (Week 6) — see outlook-addin/README.md
 tests/                 pytest suite
 sample_data/           Sample phishing (link + attachment) + legitimate emails
 ```
@@ -258,9 +271,10 @@ sample_data/           Sample phishing (link + attachment) + legitimate emails
    **Done — Week 4** (metadata-only — see above for exactly what that
    does and doesn't cover).
 5. ~~Package as a browser extension.~~ **Done — Week 5** (Chrome/Edge,
-   Manifest V3 — see `extension/README.md`). An Outlook add-in and a
-   webhook into Sentinel (reusing the existing Logic App playbook pattern)
-   are still open, for whenever this needs to live somewhere other than a
-   browser.
-6. The usual deliverable suite — GitHub README (this doubles as a start),
+   Manifest V3 — see `extension/README.md`).
+6. ~~Package as an Outlook add-in.~~ **Done — Week 6** (task pane add-in,
+   see `outlook-addin/README.md`). A webhook into Sentinel (reusing the
+   existing Logic App playbook pattern) is still open, for whenever this
+   needs to feed into a SIEM rather than being checked interactively.
+7. The usual deliverable suite — GitHub README (this doubles as a start),
    technical write-up, portfolio HTML page, LinkedIn post.

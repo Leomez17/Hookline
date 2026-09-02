@@ -1,0 +1,1310 @@
+#!/usr/bin/env bash
+echo "Hookline Week 6 update -- Outlook add-in"
+
+if [ ! -f app/main.py ]; then
+  echo "This does not look like the hookline project folder (no app/main.py here)."
+  echo "cd into the folder that has app/, static/, tests/ in it, then re-run this script."
+  exit 1
+fi
+
+if [ ! -d extension ]; then
+  echo "This looks like it is missing Week 5 -- Week 6 assumes the extension/ folder is already here."
+  echo "Apply the Week 5 update first, then re-run this script."
+  exit 1
+fi
+
+set -e
+
+# Use whichever Python is on PATH, but keep pip/pytest/icon-decoding on the
+# SAME one -- mixing python3/python across tools caused a false failure once.
+if command -v python3 >/dev/null 2>&1; then
+  PY=python3
+elif command -v python >/dev/null 2>&1; then
+  PY=python
+else
+  echo "No python or python3 found on PATH. Install Python (python.org) and re-run this script."
+  exit 1
+fi
+echo "Using $PY ($($PY --version))"
+
+mkdir -p "outlook-addin"
+mkdir -p "outlook-addin/assets"
+
+echo "  writing outlook-addin/manifest.xml"
+cat > outlook-addin/manifest.xml <<'HOOKLINE_WEEK6_EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
+  xsi:type="MailApp">
+
+  <Id>a7575fb2-d18d-4e87-ab54-82ae9d066529</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Leonard Abanobi</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="Hookline"/>
+  <Description DefaultValue="Phishing &amp; suspicious-link detector for the open email, powered by your local Hookline instance."/>
+  <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png"/>
+  <HighResIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
+  <SupportUrl DefaultValue="https://github.com/Leomez17/Hookline"/>
+  <AppDomains>
+    <AppDomain>https://localhost:3000</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Mailbox"/>
+  </Hosts>
+  <Requirements>
+    <Sets>
+      <Set Name="Mailbox" MinVersion="1.9"/>
+    </Sets>
+  </Requirements>
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://localhost:3000/taskpane.html"/>
+        <RequestedHeight>450</RequestedHeight>
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
+  <Permissions>ReadItem</Permissions>
+  <Rule xsi:type="RuleCollection" Mode="Or">
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read"/>
+  </Rule>
+  <DisableEntityHighlighting>false</DisableEntityHighlighting>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Requirements>
+      <bt:Sets DefaultMinVersion="1.5">
+        <bt:Set Name="Mailbox" MinVersion="1.9"/>
+      </bt:Sets>
+    </Requirements>
+    <Hosts>
+      <Host xsi:type="MailHost">
+        <DesktopFormFactor>
+          <FunctionFile resid="Commands.Url"/>
+          <ExtensionPoint xsi:type="MessageReadCommandSurface">
+            <OfficeTab id="TabDefault">
+              <Group id="msgReadGroup">
+                <Label resid="GroupLabel"/>
+                <Control xsi:type="Button" id="msgReadOpenPaneButton">
+                  <Label resid="TaskpaneButton.Label"/>
+                  <Supertip>
+                    <Title resid="TaskpaneButton.Label"/>
+                    <Description resid="TaskpaneButton.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16x16" DefaultValue="https://localhost:3000/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="https://localhost:3000/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="https://localhost:3000/assets/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Commands.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GroupLabel" DefaultValue="Hookline"/>
+        <bt:String id="TaskpaneButton.Label" DefaultValue="Check with Hookline"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Score this email for phishing signals using your local Hookline instance."/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>
+HOOKLINE_WEEK6_EOF
+
+echo "  writing outlook-addin/taskpane.html"
+cat > outlook-addin/taskpane.html <<'HOOKLINE_WEEK6_EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=Edge">
+<title>Hookline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fjalla+One&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Required to talk to the host Outlook client (Office.context.mailbox, roamingSettings, etc). -->
+<script src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js" type="text/javascript"></script>
+<style>
+  :root {
+    --paper: #f1f3f5;
+    --paper-raised: #e7ebee;
+    --ink: #1b2430;
+    --ink-soft: #4b5563;
+    --line: #d3d8de;
+    --accent: #2d6e8e;
+    --accent-soft: #dde9ee;
+    --amber: #9c6a1f;
+    --amber-soft: #f3e6d1;
+    --critical: #a3403a;
+    --critical-soft: #f3ddda;
+    --good: #3f7a5c;
+    --good-soft: #dcece3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12161c;
+      --paper-raised: #1a2029;
+      --ink: #e7eaee;
+      --ink-soft: #a6adb8;
+      --line: #2a323c;
+      --accent: #7bbdd9;
+      --accent-soft: #1e3742;
+      --amber: #dba35c;
+      --amber-soft: #3a2c17;
+      --critical: #e0918b;
+      --critical-soft: #3a2321;
+      --good: #8fcaa9;
+      --good-soft: #1e3327;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.5;
+  }
+  main { padding: 16px 18px 24px; max-width: 480px; }
+
+  .header { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+  .header img { width: 22px; height: 22px; display: block; }
+  h1 {
+    font-family: "Fjalla One", sans-serif;
+    font-weight: 400;
+    font-size: 21px;
+    margin: 0;
+  }
+  .settings-link {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+  }
+  .settings-link:hover { color: var(--accent); }
+
+  .message-meta {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 9px 10px;
+    margin: 10px 0 12px;
+  }
+  .message-meta .from { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; word-break: break-all; }
+  .message-meta .subject { color: var(--ink); margin-top: 3px; }
+
+  #settings-panel {
+    display: none;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  #settings-panel label { font-size: 12px; color: var(--ink-soft); display: block; margin-bottom: 5px; }
+  #settings-panel input {
+    width: 100%;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  #settings-panel .row { display: flex; gap: 8px; margin-top: 9px; }
+  #settings-panel button {
+    font-family: "Public Sans", sans-serif;
+    font-size: 12.5px; font-weight: 600;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 3px;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  #settings-panel button#save-settings { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+  #settings-status { font-size: 11.5px; margin-top: 6px; }
+  #settings-status.ok { color: var(--good); }
+  #settings-status.err { color: var(--critical); }
+
+  button#check-btn {
+    width: 100%;
+    font-family: "Public Sans", sans-serif;
+    font-weight: 600; font-size: 14px;
+    background: var(--accent); color: var(--paper);
+    border: none; border-radius: 3px; padding: 10px;
+    cursor: pointer;
+  }
+  button#check-btn:hover { opacity: .92; }
+  button#check-btn:disabled { opacity: .5; cursor: default; }
+
+  #result { margin-top: 14px; display: none; }
+
+  .verdict-card {
+    display: flex; align-items: center; gap: 12px;
+    border: 1px solid var(--line); border-radius: 3px; padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .verdict-card.safe { background: var(--good-soft); border-color: var(--good); }
+  .verdict-card.suspicious { background: var(--amber-soft); border-color: var(--amber); }
+  .verdict-card.malicious { background: var(--critical-soft); border-color: var(--critical); }
+
+  .score {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums;
+    min-width: 44px;
+  }
+  .verdict-label {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600;
+  }
+
+  .mitre-row { display: flex; gap: 5px; flex-wrap: wrap; margin: 0 0 12px; }
+  .mitre-pill {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10.5px; padding: 2px 7px; border-radius: 2px;
+    background: var(--accent-soft); color: var(--accent);
+  }
+
+  #evidence-list { max-height: 320px; overflow-y: auto; }
+  .evidence-item {
+    padding: 9px 0; border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between; gap: 12px;
+  }
+  .evidence-item:first-child { border-top: none; }
+  .evidence-detail { font-size: 12.5px; }
+  .evidence-signal {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10px; color: var(--ink-soft); display: block; margin-top: 2px;
+  }
+  .evidence-points {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 12px; white-space: nowrap; color: var(--ink-soft);
+  }
+
+  .notes { margin-top: 10px; font-size: 12px; color: var(--ink-soft); }
+  .limitation-note {
+    font-size: 11.5px; color: var(--ink-soft); font-style: italic;
+    margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line);
+  }
+  .error {
+    margin-top: 12px; font-size: 12.5px; color: var(--critical);
+    background: var(--critical-soft); border: 1px solid var(--critical);
+    border-radius: 3px; padding: 10px; display: none;
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="header">
+    <img src="assets/icon-32.png" alt="">
+    <h1>Hookline</h1>
+    <button class="settings-link" id="settings-toggle" type="button">settings</button>
+  </div>
+
+  <div class="message-meta" id="message-meta">
+    <div class="from" id="message-from">—</div>
+    <div class="subject" id="message-subject"></div>
+  </div>
+
+  <div id="settings-panel">
+    <label for="api-base">Hookline API base URL</label>
+    <input id="api-base" type="text" placeholder="http://127.0.0.1:8000" />
+    <div class="row">
+      <button id="save-settings" type="button">Save</button>
+      <button id="cancel-settings" type="button">Cancel</button>
+    </div>
+    <div id="settings-status"></div>
+  </div>
+
+  <button id="check-btn">Check this email</button>
+
+  <div id="result">
+    <div class="verdict-card" id="verdict-card">
+      <div class="score" id="score">—</div>
+      <div>
+        <div class="verdict-label" id="verdict-label">—</div>
+        <div id="notes" class="notes" style="margin-top:0;"></div>
+      </div>
+    </div>
+    <div class="mitre-row" id="mitre-row"></div>
+    <div id="evidence-list"></div>
+    <div class="limitation-note" id="limitation-note" style="display:none;"></div>
+  </div>
+
+  <div class="error" id="error"></div>
+</main>
+<script type="module" src="taskpane.js"></script>
+</body>
+</html>
+HOOKLINE_WEEK6_EOF
+
+echo "  writing outlook-addin/taskpane.js"
+cat > outlook-addin/taskpane.js <<'HOOKLINE_WEEK6_EOF'
+import { checkContent, verdictWord, getApiBase, setApiBase } from "./shared.js";
+
+const messageFromEl = document.getElementById("message-from");
+const messageSubjectEl = document.getElementById("message-subject");
+const checkBtn = document.getElementById("check-btn");
+const resultEl = document.getElementById("result");
+const errorEl = document.getElementById("error");
+const limitationNoteEl = document.getElementById("limitation-note");
+
+const settingsToggle = document.getElementById("settings-toggle");
+const settingsPanel = document.getElementById("settings-panel");
+const apiBaseInput = document.getElementById("api-base");
+const settingsStatus = document.getElementById("settings-status");
+
+settingsToggle.addEventListener("click", () => {
+  const showing = settingsPanel.style.display === "block";
+  if (!showing) apiBaseInput.value = getApiBase();
+  settingsPanel.style.display = showing ? "none" : "block";
+  settingsStatus.textContent = "";
+});
+
+document.getElementById("cancel-settings").addEventListener("click", () => {
+  settingsPanel.style.display = "none";
+});
+
+document.getElementById("save-settings").addEventListener("click", async () => {
+  const value = apiBaseInput.value.trim().replace(/\/$/, "");
+  if (!value) {
+    settingsStatus.textContent = "Enter an API base URL.";
+    settingsStatus.className = "err";
+    return;
+  }
+  try {
+    const parsed = new URL(value);
+    if (!/^https?:$/.test(parsed.protocol)) throw new Error();
+  } catch {
+    settingsStatus.textContent = "That doesn't look like a valid URL (include http:// or https://).";
+    settingsStatus.className = "err";
+    return;
+  }
+  try {
+    await setApiBase(value);
+    settingsStatus.textContent = "Saved.";
+    settingsStatus.className = "ok";
+  } catch (err) {
+    settingsStatus.textContent = err.message;
+    settingsStatus.className = "err";
+  }
+});
+
+function renderResult(result, { limitedHeaders = false } = {}) {
+  const card = document.getElementById("verdict-card");
+  card.className = "verdict-card " + result.verdict;
+  document.getElementById("score").textContent = result.score;
+  document.getElementById("verdict-label").textContent = verdictWord(result.verdict);
+  document.getElementById("notes").textContent = result.notes || "";
+
+  const mitreRow = document.getElementById("mitre-row");
+  mitreRow.innerHTML = "";
+  result.mitre_techniques.forEach((t) => {
+    const pill = document.createElement("span");
+    pill.className = "mitre-pill";
+    pill.textContent = t;
+    mitreRow.appendChild(pill);
+  });
+
+  const list = document.getElementById("evidence-list");
+  list.innerHTML = "";
+  if (result.evidence.length === 0) {
+    const div = document.createElement("div");
+    div.className = "evidence-item";
+    div.innerHTML = "<span class='evidence-detail'>No signals triggered.</span>";
+    list.appendChild(div);
+  } else {
+    result.evidence.forEach((ev) => {
+      const div = document.createElement("div");
+      div.className = "evidence-item";
+      const detail = document.createElement("span");
+      detail.className = "evidence-detail";
+      detail.textContent = ev.detail;
+      const signal = document.createElement("span");
+      signal.className = "evidence-signal";
+      signal.textContent = ev.signal;
+      detail.appendChild(signal);
+      const points = document.createElement("span");
+      points.className = "evidence-points";
+      points.textContent = ev.points > 0 ? "+" + ev.points : String(ev.points);
+      div.appendChild(detail);
+      div.appendChild(points);
+      list.appendChild(div);
+    });
+  }
+
+  limitationNoteEl.style.display = limitedHeaders ? "block" : "none";
+  limitationNoteEl.textContent = limitedHeaders
+    ? "This Outlook client didn't provide full message headers, so Reply-To mismatch and SPF/DKIM/DMARC " +
+      "alignment couldn't be checked — only sender, subject, body text, and any links were scored."
+    : "";
+
+  resultEl.style.display = "block";
+  errorEl.style.display = "none";
+}
+
+function getBodyText(item) {
+  return new Promise((resolve, reject) => {
+    item.body.getAsync(Office.CoercionType.Text, (result) => {
+      if (result.status === Office.AsyncResultStatus.Succeeded) {
+        resolve(result.value || "");
+      } else {
+        reject(new Error(result.error?.message || "Couldn't read the message body."));
+      }
+    });
+  });
+}
+
+function getAllInternetHeaders(item) {
+  return new Promise((resolve, reject) => {
+    if (typeof item.getAllInternetHeadersAsync !== "function") {
+      resolve(null);
+      return;
+    }
+    item.getAllInternetHeadersAsync((result) => {
+      if (result.status === Office.AsyncResultStatus.Succeeded) {
+        resolve(result.value || null);
+      } else {
+        // Some hosts advertise the method but still refuse it (e.g. an item
+        // in an unsupported folder) — degrade to the fallback rather than fail.
+        resolve(null);
+      }
+    });
+  });
+}
+
+// A raw source the same email-signal parser the browser extension and demo
+// UI use can read: real internet headers when the host gives them to us
+// (From/Reply-To/Authentication-Results, exactly what app/signals/email_signals.py
+// looks for), or a minimal reconstructed From/Subject block when it can't —
+// clearly flagged in the UI rather than silently skipping checks.
+async function buildRawEmail(item) {
+  const headers = await getAllInternetHeaders(item);
+  const body = await getBodyText(item);
+
+  if (headers) {
+    return { raw: `${headers}\n\n${body}`, limitedHeaders: false };
+  }
+
+  const fromAddr = item.from ? `"${item.from.displayName || ""}" <${item.from.emailAddress || ""}>` : "";
+  const subject = item.subject || "";
+  return { raw: `From: ${fromAddr}\nSubject: ${subject}\n\n${body}`, limitedHeaders: true };
+}
+
+async function runCheck(item) {
+  checkBtn.disabled = true;
+  checkBtn.textContent = "Checking…";
+  errorEl.style.display = "none";
+  try {
+    const { raw, limitedHeaders } = await buildRawEmail(item);
+    const result = await checkContent("email", raw);
+    renderResult(result, { limitedHeaders });
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.style.display = "block";
+    resultEl.style.display = "none";
+  } finally {
+    checkBtn.disabled = false;
+    checkBtn.textContent = "Check this email";
+  }
+}
+
+Office.onReady(() => {
+  const item = Office.context.mailbox.item;
+  if (!item) {
+    messageFromEl.textContent = "No message is open.";
+    checkBtn.disabled = true;
+    return;
+  }
+
+  const fromName = item.from?.displayName || "";
+  const fromAddr = item.from?.emailAddress || "";
+  messageFromEl.textContent = fromName ? `${fromName} <${fromAddr}>` : fromAddr || "(unknown sender)";
+  messageSubjectEl.textContent = item.subject || "(no subject)";
+
+  checkBtn.addEventListener("click", () => runCheck(item));
+});
+HOOKLINE_WEEK6_EOF
+
+echo "  writing outlook-addin/shared.js"
+cat > outlook-addin/shared.js <<'HOOKLINE_WEEK6_EOF'
+// Shared between taskpane.js and (eventually) any other add-in surface —
+// the one place that knows how to reach the Hookline API and how to read
+// or write the saved API base URL. Mirrors extension/shared.js, but swaps
+// chrome.storage.sync for Office.context.roamingSettings, which is the
+// Outlook add-in equivalent: it follows the signed-in user across devices
+// rather than being scoped to one browser profile.
+
+export const DEFAULT_API_BASE = "http://127.0.0.1:8000";
+const ROAMING_KEY = "hooklineApiBase";
+
+export function getApiBase() {
+  const value = Office.context.roamingSettings.get(ROAMING_KEY);
+  return value || DEFAULT_API_BASE;
+}
+
+export function setApiBase(value) {
+  return new Promise((resolve, reject) => {
+    Office.context.roamingSettings.set(ROAMING_KEY, value);
+    Office.context.roamingSettings.saveAsync((result) => {
+      if (result.status === Office.AsyncResultStatus.Succeeded) {
+        resolve();
+      } else {
+        reject(new Error(result.error?.message || "Couldn't save the setting."));
+      }
+    });
+  });
+}
+
+// Throws with a human-readable .message on any failure — network error,
+// non-2xx response, or a response that isn't the JSON shape /check
+// returns — so callers can show it directly rather than a stack trace.
+export async function checkContent(type, content) {
+  const apiBase = getApiBase();
+  let res;
+  try {
+    res = await fetch(`${apiBase}/check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, content }),
+    });
+  } catch (err) {
+    throw new Error(
+      `Couldn't reach the Hookline API at ${apiBase}. Is it running? ` +
+      `(python -m uvicorn app.main:app --reload) — you can change the address in the add-in's settings.`
+    );
+  }
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail ? JSON.stringify(body.detail) : `Request failed (HTTP ${res.status})`);
+  }
+
+  return res.json();
+}
+
+export function verdictWord(v) {
+  return { safe: "Safe", suspicious: "Suspicious", malicious: "Malicious" }[v] || v;
+}
+HOOKLINE_WEEK6_EOF
+
+echo "  writing outlook-addin/serve-addin.js"
+cat > outlook-addin/serve-addin.js <<'HOOKLINE_WEEK6_EOF'
+// Serves this folder over HTTPS on https://localhost:3000.
+//
+// Outlook add-ins are stricter than a Chrome extension's "Load unpacked"
+// flow: every URL in manifest.xml (the task pane, its icons) has to be
+// HTTPS, even for local development. office-addin-dev-certs is Microsoft's
+// own tool for this — it generates a self-signed certificate for
+// localhost and installs it into your system's trust store the first time
+// it runs, so Outlook (and your browser) accept it without a warning.
+// The Chrome extension never needed this because "Load unpacked" reads
+// files straight off disk; Outlook always fetches the add-in over a URL.
+const https = require("https");
+const http = require("http");
+const fs = require("fs");
+const path = require("path");
+const devCerts = require("office-addin-dev-certs");
+
+const PORT = 3000;
+const ROOT = __dirname;
+
+const MIME_TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".xml": "application/xml; charset=utf-8",
+  ".png": "image/png",
+  ".ico": "image/x-icon",
+};
+
+function requestHandler(req, res) {
+  let reqPath = decodeURIComponent(req.url.split("?")[0]);
+  if (reqPath === "/") reqPath = "/taskpane.html";
+
+  const filePath = path.join(ROOT, reqPath);
+  // Refuse to serve anything outside this folder.
+  if (!filePath.startsWith(ROOT)) {
+    res.writeHead(403);
+    res.end("Forbidden");
+    return;
+  }
+
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end(`Not found: ${reqPath}`);
+      return;
+    }
+    const ext = path.extname(filePath);
+    res.writeHead(200, {
+      "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.end(data);
+  });
+}
+
+async function main() {
+  const httpsOptions = await devCerts.getHttpsServerOptions();
+  https.createServer(httpsOptions, requestHandler).listen(PORT, () => {
+    console.log(`Hookline Outlook add-in served at https://localhost:${PORT}`);
+    console.log(`Manifest to sideload: https://localhost:${PORT}/manifest.xml`);
+    console.log("Leave this running while you use the add-in in Outlook. Ctrl+C to stop.");
+  });
+}
+
+main().catch((err) => {
+  console.error("Couldn't start the HTTPS server:", err.message);
+  process.exit(1);
+});
+HOOKLINE_WEEK6_EOF
+
+echo "  writing outlook-addin/package.json"
+cat > outlook-addin/package.json <<'HOOKLINE_WEEK6_EOF'
+{
+  "name": "hookline-outlook-addin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hookline phishing checker as an Outlook task pane add-in.",
+  "scripts": {
+    "start": "node serve-addin.js"
+  },
+  "dependencies": {
+    "office-addin-dev-certs": "^2.0.10"
+  }
+}
+HOOKLINE_WEEK6_EOF
+
+echo "  writing outlook-addin/README.md"
+cat > outlook-addin/README.md <<'HOOKLINE_WEEK6_EOF'
+# Hookline — Outlook Add-in
+
+A task pane add-in that scores the email you're currently reading for phishing signals, using the same Hookline API and rules/threat-intel/enrichment/ML pipeline as the demo web UI and the browser extension.
+
+## Why this one needs an extra step
+
+The Chrome extension loads straight off your disk ("Load unpacked"). Outlook doesn't work that way — every add-in is fetched over a URL, and Outlook requires that URL to be HTTPS, even on your own machine during development. `office-addin-dev-certs` (a small tool from Microsoft) generates a certificate for `https://localhost:3000` and trusts it on your machine the first time you run this add-in, so there's no security warning.
+
+## Setup
+
+1. Make sure Node.js is installed (`node --version` in a terminal — if that fails, install it from nodejs.org, then reopen your terminal).
+2. In this folder (`outlook-addin/`), install dependencies:
+   ```
+   npm install
+   ```
+3. Start the HTTPS server:
+   ```
+   npm start
+   ```
+   The first run installs a local dev certificate and may ask for permission — approve it. Leave this running in its own terminal window the whole time you're using the add-in (same idea as the API server).
+4. Also make sure the Hookline API itself is running in another terminal, same as always:
+   ```
+   python -m uvicorn app.main:app --reload
+   ```
+
+## Sideload it into Outlook on the web
+
+1. Go to outlook.office.com (or outlook.live.com) and sign in.
+2. Open any email, then find "Get Add-ins" on the ribbon (or the "..." more-actions menu) → "My add-ins" in the left sidebar.
+3. Near the bottom, "+ Add a custom add-in" → "Add from file...".
+4. Select `manifest.xml` from this folder.
+5. Accept the install prompt.
+
+*(Exact menu wording shifts occasionally as Microsoft updates the UI — if this exact path isn't there, search Settings for "add-ins" and it'll be nearby.)*
+
+## Using it
+
+1. Open any email.
+2. On the ribbon (or the "..." more-actions menu if the ribbon is condensed), find "Check with Hookline" and click it — this opens the task pane.
+3. Click "Check this email".
+4. Same verdict card / evidence trail / MITRE tags as everywhere else in Hookline.
+
+If your Outlook client doesn't expose full message headers (some do, some don't — this add-in checks and tells you), Reply-To mismatch and SPF/DKIM/DMARC checks are skipped for that message, but sender, subject, body text, and any links are still scored normally. That limitation is called out directly in the task pane when it applies, rather than silently skipping checks.
+
+## Known limitations
+
+- No automated test suite for this add-in specifically — same situation as the browser extension (there's no practical way to script-test an Outlook host UI the way pytest tests the API). It's been validated by serving it locally and confirming the manifest, HTTPS server, and task pane all load and render correctly; the actual click-through inside Outlook still needs a manual check the first time.
+- Sideload steps above are for Outlook on the web. Classic desktop Outlook uses a different (shared-folder or registry) sideloading method — ask if you want those instructions too.
+HOOKLINE_WEEK6_EOF
+
+echo "  writing .gitignore"
+cat > .gitignore <<'HOOKLINE_WEEK6_EOF'
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+venv/
+.venv/
+node_modules/
+HOOKLINE_WEEK6_EOF
+
+echo "  writing README.md"
+cat > README.md <<'HOOKLINE_WEEK6_EOF'
+# Hookline — Week 6
+
+A phishing & suspicious-link detector. Built from the
+[concept brief](https://claude.ai/code/artifact/9f00a0bf-5b9d-4843-a4da-88be7553a89f):
+Week 1 proved the architecture rules-only, Week 2 added real threat-intel
+lookups, Week 3 added live domain-age/TLS enrichment plus an explainable
+logistic-regression calibration layer, Week 4 added attachment
+parsing — finally earning the T1566.001 MITRE tag honestly — Week 5
+packaged the whole thing as a browser extension so a check is a click or a
+right-click away, and Week 6 adds an Outlook task pane add-in so a check
+runs right where phishing actually gets read.
+
+Paste a URL or a raw email (headers + body) and get back a 0–100 score, a
+plain verdict (`safe` / `suspicious` / `malicious`), the specific evidence
+that produced it, and a MITRE ATT&CK tag.
+
+## What's actually implemented
+
+- **URL signals** (`app/signals/url_signals.py`) — IP-literal hosts, `@`
+  hidden-destination tricks, URL shorteners, suspicious TLDs, excessive
+  subdomains/hyphens, plain HTTP, and typosquat/brand-impersonation
+  detection against a small watch-list (`app/signals/brand_watchlist.py`),
+  using edit distance the same way `dnstwist` does — just without the DNS
+  resolution step, which is still a later addition.
+- **Email signals** (`app/signals/email_signals.py`) — reply-to/sender
+  domain mismatches, display-name spoofing, SPF/DKIM/DMARC failures *if*
+  the pasted source already carries an `Authentication-Results` header,
+  urgency/credential-harvesting language scoring, and it runs the URL
+  checks above against every link found in the body.
+- **Threat-intel lookups** (`app/threat_intel/`) — real clients for
+  **Google Safe Browsing**, **VirusTotal**, and **PhishTank**, each behind
+  the same `ThreatIntelClient` interface Week 1 defined. Every one is
+  independently optional: with no key configured, that source reports
+  "not configured" rather than failing or being silently skipped — you
+  can see exactly which checks did and didn't run in the evidence trail.
+  Results are cached in-memory for 24h (`app/threat_intel/cache.py`) so
+  repeat lookups don't burn free-tier quota. For an email, only the first
+  2 links get threat-intel checks (still capped at 5 for the local
+  heuristics) — bounded on purpose so one message can't fan out into
+  unlimited API calls.
+- **Live enrichment** (`app/enrichment/`) — **off by default**, unlike the
+  threat-intel sources above. Turn it on with `ENABLE_LIVE_ENRICHMENT=true`:
+  - **RDAP domain-age lookup** (`rdap_client.py`) — via
+    [rdap.org](https://rdap.org) as a bootstrap proxy, so Hookline never
+    needs its own IANA bootstrap table. Flags a domain registered in the
+    last 30 days — phishing infrastructure is disposable almost by
+    definition, though age alone is a weak signal (plenty of legitimate
+    sites are new too).
+  - **TLS certificate check** (`tls_client.py`) — connects directly to
+    the submitted host's port 443 and reads the leaf certificate's
+    issuance/expiry dates, without verifying the chain (`CERT_NONE`),
+    because a self-signed or expired cert is exactly the kind of anomaly
+    worth surfacing, not a reason to fail closed before looking. This is
+    the one check that talks directly to a potentially hostile,
+    user-supplied destination, so it carries its own SSRF guard: every
+    resolved address is checked against private/loopback/link-local/
+    reserved ranges before a socket opens, and the connection goes to
+    that specific validated IP rather than a fresh DNS lookup at connect
+    time — closing the DNS-rebinding window in between.
+  - Both are cached for 24h (`app/enrichment/cache.py`) and, for an
+    email, bounded to the first link only (`ENRICHMENT_LINK_CAP = 1` in
+    `app/scoring.py`) — tighter than threat-intel's cap of 2, since this
+    is two live round trips per target instead of one API call.
+- **Logistic-regression calibration** (`app/ml/`) — a bolt-on scoring
+  layer, not a replacement for the rules engine: it looks at *which*
+  named signals already fired (local, threat-intel, or enrichment) and
+  estimates how much more confident a reviewer should be in the
+  combination, adding a further `ml:moderate-confidence` (+12) or
+  `ml:high-confidence` (+25) finding to the same evidence list when its
+  estimate crosses a threshold. It contributes nothing when nothing else
+  fired — it never manufactures a score from zero evidence. Trained
+  offline with scikit-learn on a small, honestly-labeled, hand-curated
+  set of signal combinations (`app/ml/dataset.py` — this is **not** real
+  captured phishing traffic, and the code says so); the resulting
+  coefficients are committed as `app/ml/weights.json`, and inference at
+  request time (`app/ml/model.py`) is a plain dot product and a sigmoid
+  with **zero ML-library dependency** — scikit-learn is only needed to
+  regenerate the weights (`scripts/train_model.py`), never to run the
+  app. Regenerate with:
+  ```bash
+  pip install scikit-learn
+  python scripts/train_model.py
+  ```
+- **Attachment parsing** (`app/signals/attachment_signals.py`) —
+  **metadata-only**: filename, declared extension, declared Content-Type.
+  This never inspects what's actually inside an attachment (no AV
+  scanning, no content sandboxing) — a wholly convincing-looking `.docx`
+  can still carry a malicious payload this won't catch, and the code says
+  so rather than implying more coverage than it has. What it does catch:
+  - **Dangerous extensions** — `.exe`, `.scr`, `.js`, `.hta`, `.ps1`,
+    `.iso`, and similar, directly executable on double-click.
+  - **Macro-enabled Office documents** — `.docm`/`.xlsm`/`.pptm` and
+    friends; a legitimate sender essentially never needs the macro-host
+    format when a plain `.docx`/`.xlsx` covers the same ground.
+  - **The double-extension trick** — `invoice.pdf.exe`, where the final
+    (real) extension is dangerous but an earlier, innocent-looking one
+    is there to catch a skimming eye.
+  - **Hidden-extension Unicode override** — a Right-to-Left Override
+    character (U+202E) embedded in the filename so the extension the OS
+    uses to run the file isn't the one displayed on screen.
+  - **Extension/Content-Type mismatch** — a `.pdf` sent with an
+    `application/x-msdownload` Content-Type, or similar: either the
+    extension or the declared type is lying.
+  Only runs on email checks (attachments don't apply to a bare URL), and
+  only ever tags T1566.001 when one of these actually fired — never as a
+  blanket label on every email.
+- **Scoring** (`app/scoring.py`) — a transparent, additive rules engine.
+  No black box: every point on the score — local, threat-intel-sourced,
+  enrichment-sourced, attachment-sourced, or ML-calibrated — is traceable
+  to a named signal in the evidence list.
+- **MITRE mapping** (`app/mitre.py`) — tags results against T1566
+  (Phishing), T1566.001 (Spearphishing Attachment — Week 4), T1566.002
+  (Spearphishing Link — including confirmed threat-intel hits and
+  enrichment/ML findings), and T1598 (Phishing for Information).
+- **Demo UI** (`static/index.html`) — a single page that hits `/check` and
+  renders the verdict card, MITRE tags, and evidence list.
+- **Browser extension** (`extension/`) — a Manifest V3 Chrome/Edge
+  extension: toolbar popup to check the current page, right-click menu to
+  check any page or link, desktop notifications, and a badge showing the
+  score. Talks to your own running Hookline instance (local by default,
+  configurable in its settings page) — see `extension/README.md` for
+  install steps and details. The API now sends permissive CORS headers
+  (`app/main.py`) to support this and other cross-origin uses, such as
+  poking `/check` from a browser console.
+- **Outlook add-in** (`outlook-addin/`) — a task pane add-in for reading
+  mail: opens next to the email you're viewing, reads its headers (when the
+  Outlook client provides them) and body via Office.js, and scores it
+  through the same `/check` endpoint. Unlike the browser extension, Outlook
+  requires every add-in asset to be served over HTTPS even during local
+  development, so this ships its own small Node HTTPS static server using
+  Microsoft's `office-addin-dev-certs` for a trusted local certificate —
+  see `outlook-addin/README.md` for setup and sideload steps.
+
+## Setting up API keys and live enrichment
+
+The three threat-intel keys are optional and independent — Hookline runs
+with zero, one, two, or all three configured. Live enrichment is a
+separate, single on/off switch, off by default.
+
+```bash
+cp .env.example .env
+```
+
+Then fill in whichever of these you want live:
+
+- **Google Safe Browsing** — free, but licensed for non-commercial use
+  only. Enable the API and create a key:
+  https://developers.google.com/safe-browsing/v4/get-started
+- **VirusTotal** — free tier, rate-limited per-minute/day/month. Sign up
+  at https://www.virustotal.com/gui/join-us, then copy your key from
+  https://www.virustotal.com/gui/my-apikey. This client only reads
+  existing reports — it never submits a new scan, to avoid burning quota.
+- **PhishTank** — free, maintained by Cisco Talos. Register and generate
+  an app key at https://phishtank.net.
+- **`ENABLE_LIVE_ENRICHMENT`** — set to `true` to turn on the RDAP
+  domain-age and TLS certificate checks. No signup needed (RDAP is a free,
+  keyless public protocol), but this is the one feature that connects
+  directly to whatever host a submitted URL points at, so it's opt-in
+  rather than on by default — see the enrichment section above for the
+  SSRF guard that goes with it.
+
+`uvicorn` picks up `.env` automatically on startup (via `python-dotenv`
+in `app/main.py`). No restart trick needed beyond the normal one.
+
+## What's deliberately not here yet
+
+No redirect-chain following, no real (receiving-server-side) SPF/DKIM/DMARC
+verification — those still rely on whatever `Authentication-Results`
+header the pasted email already carries. Attachment parsing is
+metadata-only (see above) — no AV scanning, no sandboxing, no macro/script
+content inspection. See the roadmap below.
+
+## Running it
+
+```bash
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+Then open http://127.0.0.1:8000 for the demo UI, or call the API directly:
+
+```bash
+curl -X POST http://127.0.0.1:8000/check \
+  -H "Content-Type: application/json" \
+  -d '{"type": "url", "content": "https://paypa1-secure-login.top/verify"}'
+```
+
+Three sample emails are in `sample_data/` — phishing with a malicious link,
+phishing with a malicious attachment, and one clean — used by the test
+suite and handy for manually poking the UI.
+
+## Testing
+
+```bash
+pytest -v
+```
+
+73 tests. Threat-intel tests mock `requests` directly; enrichment tests
+mock `requests` (RDAP) and `socket`/`ssl` (TLS) the same way, including a
+dedicated test that the TLS client's SSRF guard actually refuses to
+connect when a host resolves only to a private address. Attachment tests
+build real MIME multipart messages with Python's own `email.mime` helpers
+(placeholder payloads only — no real executable/malware bytes anywhere in
+this repo) and round-trip them through the same parser the app uses. None
+of these make a real network call, so the suite is safe and fast to run
+with or without API keys or `ENABLE_LIVE_ENRICHMENT` set, and can't
+accidentally burn your quota or probe a live host. `tests/test_main.py`
+covers the CORS middleware directly, using FastAPI's `TestClient`.
+
+The extension itself has no `pytest`-style suite (there isn't an
+equivalent harness for a Manifest V3 extension in this project), but it's
+been smoke-tested end-to-end — service worker startup, settings
+save/reload, and a real check against a running Hookline server, all
+through the extension's own code — see `extension/README.md`. The Outlook
+add-in is the same situation, for the same reason (no practical way to
+script-test an Outlook host UI) — its manifest, HTTPS server, and task
+pane markup were validated directly instead — see `outlook-addin/README.md`.
+
+## Project layout
+
+```
+app/
+  main.py              FastAPI app — GET /, GET /health, POST /check; loads .env on startup
+  models.py            Request/response schemas
+  scoring.py           Rules engine + threat-intel + enrichment + attachment + ML integration + verdict thresholds
+  mitre.py             Signal → MITRE technique mapping
+  signals/
+    url_signals.py       URL feature extraction
+    email_signals.py     Email header/body feature extraction + link extraction
+    brand_watchlist.py   Watched brands + typosquat distance check
+    attachment_signals.py Attachment metadata inspection (Week 4)
+  threat_intel/
+    base.py             ThreatIntelClient interface
+    stub.py             Testing utility — always "no data"
+    provider.py          Builds the configured client set from env vars
+    cache.py             24h TTL cache wrapper
+    safe_browsing.py     Google Safe Browsing v4 client
+    virustotal.py        VirusTotal v3 client (read-only, no scan submission)
+    phishtank.py          PhishTank client
+  enrichment/
+    base.py             EnrichmentClient interface
+    provider.py          Builds the RDAP + TLS client set, gated on ENABLE_LIVE_ENRICHMENT
+    cache.py             24h TTL cache wrapper
+    rdap_client.py        RDAP domain-age lookup (via rdap.org)
+    tls_client.py          TLS certificate check, with its own SSRF guard
+  ml/
+    dataset.py           Hand-curated, honestly-labeled calibration examples
+    features.py           Signal-name → ML feature-key normalisation
+    model.py               Runtime inference — pure Python, no sklearn dependency
+    weights.json            Trained logistic-regression coefficients (committed artifact)
+scripts/
+  train_model.py        Dev-only: regenerates app/ml/weights.json (needs scikit-learn)
+static/
+  index.html           Demo UI
+extension/             Browser extension (Week 5) — see extension/README.md
+outlook-addin/         Outlook task pane add-in (Week 6) — see outlook-addin/README.md
+tests/                 pytest suite
+sample_data/           Sample phishing (link + attachment) + legitimate emails
+```
+
+## Roadmap
+
+1. ~~Wire in Safe Browsing, VirusTotal, and PhishTank behind
+   `ThreatIntelClient`, with response caching so free-tier rate limits
+   hold up.~~ **Done — Week 2.**
+2. ~~Add live WHOIS/RDAP lookups for domain age, and TLS certificate
+   issuance-date checks.~~ **Done — Week 3.**
+3. ~~Add the logistic-regression scoring layer alongside the rules engine —
+   not instead of it, so results stay explainable.~~ **Done — Week 3.**
+4. ~~Attachment parsing, to finally earn the T1566.001 tag honestly.~~
+   **Done — Week 4** (metadata-only — see above for exactly what that
+   does and doesn't cover).
+5. ~~Package as a browser extension.~~ **Done — Week 5** (Chrome/Edge,
+   Manifest V3 — see `extension/README.md`).
+6. ~~Package as an Outlook add-in.~~ **Done — Week 6** (task pane add-in,
+   see `outlook-addin/README.md`). A webhook into Sentinel (reusing the
+   existing Logic App playbook pattern) is still open, for whenever this
+   needs to feed into a SIEM rather than being checked interactively.
+7. The usual deliverable suite — GitHub README (this doubles as a start),
+   technical write-up, portfolio HTML page, LinkedIn post.
+HOOKLINE_WEEK6_EOF
+
+echo "  writing outlook-addin/assets/icon-16.png"
+cat > .hookline_icon_tmp.b64 <<'HOOKLINE_WEEK6_EOF'
+iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABgUlEQVR4nJWSP2tTYRTGf8+bm9xu
+llIqha6CJk3dSyFDVze5pbtbKHfI5nSTUYhdOnTwAxR6v4GLm5BBl5R00E0oWNGS0lITe9/j0BiM
+5KbxnOWFw3ne58+BecpMU99AMMe6kOxJ/OoRwKn0CRBgAG7WZhRFBcCqcXu76MJO0YWdatzeBmw0
+mw1wXi4LwHBbSDdIN4bb+numWQBgImmqev7wAaXBewCG4WZ35WufVtNANpMByGrguof1C/O+Y953
+uof1ixo40P0eTDCRFpAWYDKFOQFk/OnRz/8JkF9TAaLouPDvweTVtENSmu5k9+WTw8AE2Eb8evdp
+fb8C8A0cmHSXmM8HSBIHsvW99mNccHRbYpHouDD8saQ747SG7CxfQq8iAO9Yls+yq37/A2kj+wxZ
++UWyhLQp9BJgpVcZJzGpNElc1KvodPXLu0IxXPaDYSz57wThG3/76/rkoFEjSRyt1ljKpAfNpqXp
+TvbTLp9Zlp0ocG8JSh/BD8Oifz4tmd/hs40dD/UhqAAAAABJRU5ErkJggg==
+HOOKLINE_WEEK6_EOF
+"$PY" -c "import base64; open('outlook-addin/assets/icon-16.png', 'wb').write(base64.b64decode(open('.hookline_icon_tmp.b64').read()))"
+rm -f .hookline_icon_tmp.b64
+
+echo "  writing outlook-addin/assets/icon-32.png"
+cat > .hookline_icon_tmp.b64 <<'HOOKLINE_WEEK6_EOF'
+iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAADUklEQVR4nO2Wz2tUVxTHv+fe92My
+EyyxQaVNoNi00JkYpSlii3SgCy10V3jddOUmUmWS0FR38rxLaaImomL2Lpqpf0ClFAJdpYhg4pSK
+dNHaRf01mEkmM+/HOS5m1KSMkwlOXJSc1Xv3nHvO555z3nkX+N+JCGV938r6vgURer3BfV+1tLZK
+2kgoBJC8P+R3u6nuQwBQXX54/c60eViPI412NaVrWXxfAYT0yLl9idSbN7XjXrUc92oi1X0zPXJu
+3wubzQJ45ox5UjuJnrhcKkblUlE7bo8WOd9sTxtKUEv94NCVZOAu3bVSb+wMy4vHFQCd3HYxWn7y
+r1Pt7LsxfbT8zLbNAHie3j3FbXNWR+dgVF76GwCsZGdvtLJ0Y75rcT8AwBj+79a2lMArFAjGMAtO
+xGGwSJbdS5bdG4fBohKcgDHsFQqb/EnWs7A3d/bQwOgkD4xOcub4+OHVukbS1iaE7yto/AMRggix
+re6tNwfaC2AMi9LOC+/aaVT3zQMAQDFLo+fXBrBR2QLYAtgC2ChA2+d56wC1kSrtvue1CkAwhtOe
+54Co6XQTjjcEuC6AXz95f+7s127f4T/6RyaGAcDzZvQaw0KGAICVTkBrCDMTUH01AN9XxhjOfDPe
+C8K00tY7YPoUAO6nb685abb+TixvK8uGQEok9BgAcPr0S7PWFCBb1ytNn9sdqWRQKj6iCCcBYBZo
+/JcjfKgsGyD6a6Gr+KC29vKytdYDhO2kbZY4vj9/+ds/4XkaxqxxOlvI1BpU+AsAAsEcjOGs71vN
+XDdV7shkakGU/M5BRSnbebc/N5FduDA2Ozh0xd5d7OI88ujbddC6e+Graib3/ZfK6RiIKysA8Q8A
+sKOQadq063UsQQSDR6c7AndpXidSuzms3BOoI/Pnh39ebfjB8Jn3bHJ+UW6yJ1opzS1sL30MoOFF
+dCMA8DxP5/P5uD83kVWWfV3ZjhNXKwzIDAn/KKQeCOMjUhhTtvuWRCHHLAduT43+Bs/TyOfjVwIA
+UBtCxnD62PhBy3EukWXtUVqD4whgBulaJTkKS4jDI7emxq61EhxotQmNYc+b0YVL3/0aBY8+4Tg6
+FVUrdzgMQo6iKA6D5TgKf+Jg5bNbU2PXPG+mpeAA8BTwnl/QBFktUwAAAABJRU5ErkJggg==
+HOOKLINE_WEEK6_EOF
+"$PY" -c "import base64; open('outlook-addin/assets/icon-32.png', 'wb').write(base64.b64decode(open('.hookline_icon_tmp.b64').read()))"
+rm -f .hookline_icon_tmp.b64
+
+echo "  writing outlook-addin/assets/icon-64.png"
+cat > .hookline_icon_tmp.b64 <<'HOOKLINE_WEEK6_EOF'
+iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAHnUlEQVR4nO2bXYhdVxXH/2vvfc79
+GGdIGhtpUYTBWp3MjCQRDHkZabEPFQMtOYO2vlkstJmYNEaxoOce8cHSTuqEmNLULyjtw71iqQ+F
+ihGGWqGFiPmY0ZaSplasTNpJM0nm3nPO3mv5cO8Nk9hI7p0znlu8v6fD+dpr/8/aa3+tA/Tp06fP
+/zGUtwHXQxBU9cLIHM0CDAATgNo4v0lqtUmXt21rDSEM1TWvNq+t6iP2sgcQAAGAz+2ZuUOAnSL8
+WQAgUn8luF8f/8lDv7v63m4K6UGEEFbok2fgD61b/zPt+feCCMIMACClAWHYNH72wrp133gLZxJE
+FQGoYxGu7V55ElYIUcSDg0NPm/JH7rVxw9pG3bokti6JrW0sWxs3rFcevGfwvcWnEUWMsNLVx+w5
+DwiqVV2bnHSju6fvMsWB39j6pZSIPIgIaUMAIM4KiAhAootl3zYu3X3q4L7n2s92Ul7veUCtBgAg
+ofvAwiAoiAgZn5jdArNbIOMRRERENFiYhO5b+Wwn9JoHEACZCEOzuDj0GhlvmK21yhgNdqdh7HZO
+E1JUfhlKD7O1ThljxKanb7hh6dbZKLLoMCCaNavKKjgLKL3CNlKKnHPnT03vXwCA0d2Pn9dKrfx4
+5myX3txrTUAQhmo+ihIAb5MyDAJxEovSesvo1PTR0anpo0rrLZzEAgKRMgzg7fkoSlrjgo56gl4T
+ABMtm0RQVcYoCDOISFwKXSjepgvF28SlADX7RWWMEkF15bOd0GsxAGiO/mjrOzcX48KlV0ypPGob
+l1ICeQJxzRtIi0hqSgOerS+fKsQDXzh20z8biCLBh90D0KrAsSP3LytxOziJT5pC2YOACaQJpCFg
+Uyx7nCZzStyOY0fuX175bCf0ogBoDmxCdeLQ/jdtsrid0+Qp5fskAhYBK98nl8a/WF54b/uJQ/vf
+RBgqRBF3U1RvCgAAUcQjYejPH44uOk5/S8oQSAQkQsoQs33ujWeipZEw9LutPNDLAgC4EWBASEgP
+XundAgENAUI3tqbI3dLTAjQhoQ+oJJFy3Ux+ruZDIMDa0hcgbwPypi9A3gbkTV+AvA3Im74AeRuQ
+N30B8jYgb/oC5G1A3vQFyNuAvOkLkLcBedMXIG8D8qYvQN4G5M1aC9CLW29XsDYCBIFuHUkQVPV/
+vTdnshcgDBVqNdc+ziKXj1iauQLS2gcQgWLJJEcwWwFae3SjDzxy59jeg38eX9rwt7Fdj+69fK1L
+SKS8sjUJBEzcAICN85tWtTmSnQBBoBFFPDY1vU0Vys8rpTcDuEWXBw+M7X7sdkQRd9scRNGGdv1J
+iMAMxep8FmZnJQChWuVPTc0UAPySFBmXNlK2aQJAALUVABZG5roLioJPtA9AUGxTYU3vAkBtZC5/
+D5gIQw0iKUl6ty4NfMYlsSWQIaWNS2LHLC8CwGyHG5nt+4no02AGQCClAMj7Kin8CwBQqeQvQLsd
+ilI7ISIAQSCsPV9Jmj40d2jf8SCo6g63sQlRxFu/+WRZhDexS5sntYEI3jr5xAPnABBodRukWQhA
+tdqkQxgqiGwSZwkAlPa0jetnTn30wk8hQrXaZGfb2EFVAaCkcHFcGe8msVaAVposcBxoed4qySxN
+btvSUOEiYbDpACKkDcilr7fydggduv9EMz1eROEr2vNhrXWANGMIYTYruzPrBQpDSykJGgAAIYIw
+RORjAKSLdkqzlYobCUOfGF9lm4AIREppl9Rjhj4KdB5TPogsBBCEoZqNIgvCadJGAIDTlJXxN409
+OD0GIgmq198FtoOqWhwMdLE8zGnqBALlFQQsL80f3PP31eQFrSSbXqD9HsHvqZXBKWAhbQwMTQNA
+LQgY1zMOEKGN8/Oybe90iUj/kG0qBCIIQEQEwZErylwlmbyk7YrsybMurjdIKUUg5ZK6017xS+Pf
+evwpVCqE2qSbCENzzVFhGKqJSkXXajV30eGgLpSG2aYMANrzlW0sv+42LD0PEZqNokyGwpnN1oKg
+qmu1STe267Efm4Gh76bLF1KiZnKjKZS1S5M/srW75g7tOw6gWdkVH2DlP0Bjuw9EulD6gY3rlgAj
+AmtKZePixuTJmT21btLir0WG01WhIJhUr47c6Q2ee/9lUyhusY3lpggiTheKWmwag+iwMD95cmbv
+a1e/YWzPgWGC+pHyCl9zcd0B0CJiTWnAuOWLL5w89O0vB0Gga+3JVgZkO19vBaaxqZmPQ9MftOfd
+YuPllEBGRIRIKV0swcX1GCJ/AvAqgHcEGCKizQDdof3CgI2XXSsd1mqvYITtP5jx+VPrz50FgCyC
+X5vsFyxaItz64CM3+17xGV0oftHVL0FEHBGUCJiU0srz24OaJsJwSQxhdkSkBZJqr+CJ40WbNG6f
+P/ydv2QV+VeyNis2lw0N1fie9d8H1MPK830X1yFgR0IkJHJ5fg80p3mt8wTSpjQAF8dvOJvubA+l
+1+I/wbVbsmqKIABkfPejo9D+wyJylzJ+UVwKcf9ZFyIF8jyItQkIv7JL9nvzP9+3uFaVB/4Ha3YT
+YWhav7JgfGpmM2n6OgvvgMhwa2jb/MWFCCB6l0i9AHZPnJjZ+wqA5jpDhkHvav4NmLKePCxka7IA
+AAAASUVORK5CYII=
+HOOKLINE_WEEK6_EOF
+"$PY" -c "import base64; open('outlook-addin/assets/icon-64.png', 'wb').write(base64.b64decode(open('.hookline_icon_tmp.b64').read()))"
+rm -f .hookline_icon_tmp.b64
+
+echo "  writing outlook-addin/assets/icon-80.png"
+cat > .hookline_icon_tmp.b64 <<'HOOKLINE_WEEK6_EOF'
+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
+IAAAAAAASUVORK5CYII=
+HOOKLINE_WEEK6_EOF
+"$PY" -c "import base64; open('outlook-addin/assets/icon-80.png', 'wb').write(base64.b64decode(open('.hookline_icon_tmp.b64').read()))"
+rm -f .hookline_icon_tmp.b64
+
+echo "  writing outlook-addin/assets/icon-128.png"
+cat > .hookline_icon_tmp.b64 <<'HOOKLINE_WEEK6_EOF'
+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
+TkSuQmCC
+HOOKLINE_WEEK6_EOF
+"$PY" -c "import base64; open('outlook-addin/assets/icon-128.png', 'wb').write(base64.b64decode(open('.hookline_icon_tmp.b64').read()))"
+rm -f .hookline_icon_tmp.b64
+
+echo "Files written."
+set +e
+
+echo "No new Python dependencies this week -- the Outlook add-in talks to the"
+echo "same /check endpoint the extension and demo UI already use."
+"$PY" -m pip install -r requirements.txt
+
+echo "Running tests..."
+"$PY" -m pytest -v
+TEST_STATUS=$?
+
+echo ""
+if command -v npm >/dev/null 2>&1; then
+  echo "Installing the Outlook add-in's own dependencies (npm install)..."
+  (cd outlook-addin && npm install)
+  NPM_STATUS=$?
+else
+  echo "npm was not found on PATH -- skipping the Outlook add-in's dependency install."
+  echo "Install Node.js from nodejs.org, then run: cd outlook-addin && npm install"
+  NPM_STATUS=1
+fi
+
+if [ $TEST_STATUS -eq 0 ]; then
+  echo ""
+  echo "All tests passed. Week 6 is in place."
+  echo ""
+  echo "To use the Outlook add-in:"
+  echo "  1. Make sure the API is running: python -m uvicorn app.main:app --reload"
+  if [ $NPM_STATUS -eq 0 ]; then
+    echo "  2. In a separate terminal: cd outlook-addin && npm start"
+  else
+    echo "  2. Install Node.js, then: cd outlook-addin && npm install && npm start"
+  fi
+  echo "  3. Sideload outlook-addin/manifest.xml into Outlook on the web"
+  echo "     (Get Add-ins -> My add-ins -> Add a custom add-in -> Add from file)"
+  echo "  4. Open any email, click Check with Hookline on the ribbon"
+  echo "See outlook-addin/README.md for the full rundown and troubleshooting."
+  echo ""
+  echo "Next:"
+  echo "  git add -A"
+  echo "  git commit -m \"Week 6: Outlook task pane add-in\""
+  echo "  git push"
+else
+  echo ""
+  echo "Files are updated, but pytest reported failures above (exit code $TEST_STATUS)."
+  echo "Paste that output back and we will sort it out before you commit."
+fi
