@@ -1,0 +1,27 @@
+{
+  "intercept": -0.3636,
+  "weights": {
+    "brand-impersonation": 1.5068,
+    "display-name-spoofing": 1.0985,
+    "dkim-fail": -0.1476,
+    "dmarc-fail": 0.8637,
+    "enrich:newly-registered-domain": 0.2494,
+    "enrich:tls:expired-certificate": -0.1196,
+    "enrich:tls:handshake-failed": -0.3346,
+    "enrich:tls:recently-issued-certificate": -0.3717,
+    "excessive-hyphens": 0.511,
+    "excessive-subdomains": -0.3289,
+    "ip-literal-host": 0.6538,
+    "long-host": -0.6432,
+    "no-tls": 0.0558,
+    "reply-to-mismatch": 0.9747,
+    "spf-fail": 0.8637,
+    "suspicious-tld": 0.4026,
+    "ti-hit": 1.2865,
+    "typosquat": 1.6955,
+    "urgency-language": 0.3917,
+    "url-shortener": -0.3346,
+    "userinfo-in-url": 0.9442
+  },
+  "trained_on_examples": 68
+}

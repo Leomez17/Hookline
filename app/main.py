@@ -8,9 +8,10 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 # Must run before anything reads GOOGLE_SAFE_BROWSING_API_KEY / VIRUSTOTAL_API_KEY /
-# PHISHTANK_API_KEY from the environment — those are read lazily per-request
-# (see app/threat_intel/provider.py), but .env needs to be loaded into the
-# process environment once, here, at startup.
+# PHISHTANK_API_KEY / ENABLE_LIVE_ENRICHMENT from the environment — those are
+# read lazily per-request (see app/threat_intel/provider.py and
+# app/enrichment/provider.py), but .env needs to be loaded into the process
+# environment once, here, at startup.
 load_dotenv()
 
 from app.models import CheckRequest, CheckResponse  # noqa: E402
@@ -20,8 +21,12 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 app = FastAPI(
     title="Hookline",
-    description="Phishing & suspicious-link detector — rules engine + threat-intel lookups (Google Safe Browsing, VirusTotal, PhishTank).",
-    version="0.2.0",
+    description=(
+        "Phishing & suspicious-link detector — rules engine + threat-intel lookups "
+        "(Google Safe Browsing, VirusTotal, PhishTank) + optional live domain-age/TLS "
+        "enrichment + an explainable logistic-regression calibration layer."
+    ),
+    version="0.3.0",
 )
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

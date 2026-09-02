@@ -26,7 +26,11 @@ def techniques_for(check_type: CheckType, signal_names: List[str], score: int) -
 
     for name in signal_names:
         bare = name.split("link:", 1)[-1] if name.startswith("link:") else name
-        is_link_related = name.startswith("link:") or name.startswith("ti:") or check_type == CheckType.url
+        is_link_related = (
+            name.startswith("link:") or name.startswith("ti:")
+            or name.startswith("enrich:") or name.startswith("ml:")
+            or check_type == CheckType.url
+        )
         if is_link_related:
             techniques.add("T1566.002")  # Spearphishing Link — includes confirmed threat-intel hits
         if bare in SENDER_SPOOFING_SIGNALS:
