@@ -111,4 +111,20 @@ DATASET: List[Example] = [
     {"features": ["ti-hit", "typosquat"], "label": 1},
     {"features": ["ti-hit", "no-tls"], "label": 1},
     {"features": ["ti-hit", "urgency-language", "reply-to-mismatch"], "label": 1},
+
+    # --- Attachments (Week 4): metadata-only, but some patterns are near-certain --
+    {"features": ["attachment-dangerous-extension"], "label": 1},
+    {"features": ["attachment-dangerous-extension"], "label": 1},
+    {"features": ["attachment-macro-enabled-document"], "label": 1},
+    {"features": ["attachment-hidden-extension-unicode-override"], "label": 1},
+    {"features": ["attachment-hidden-extension-unicode-override"], "label": 1},
+    {"features": ["attachment-double-extension", "attachment-dangerous-extension"], "label": 1},
+    {"features": ["attachment-dangerous-extension", "urgency-language"], "label": 1},
+    {"features": ["attachment-macro-enabled-document", "reply-to-mismatch"], "label": 1},
+    # A declared Content-Type not matching the extension is common on
+    # legitimate mail servers too (misconfigured relays, odd MTAs) — weak
+    # alone, same treatment as the other single-weak-signal legit cases.
+    {"features": ["attachment-extension-content-type-mismatch"], "label": 0},
+    {"features": ["attachment-extension-content-type-mismatch"], "label": 0},
+    {"features": ["attachment-extension-content-type-mismatch", "urgency-language"], "label": 1},
 ]

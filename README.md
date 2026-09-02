@@ -1,10 +1,11 @@
-# Hookline — Week 3
+# Hookline — Week 4
 
 A phishing & suspicious-link detector. Built from the
 [concept brief](https://claude.ai/code/artifact/9f00a0bf-5b9d-4843-a4da-88be7553a89f):
 Week 1 proved the architecture rules-only, Week 2 added real threat-intel
-lookups, and Week 3 adds live domain-age/TLS enrichment plus an
-explainable logistic-regression calibration layer on top of both.
+lookups, Week 3 added live domain-age/TLS enrichment plus an explainable
+logistic-regression calibration layer, and Week 4 adds attachment
+parsing — finally earning the T1566.001 MITRE tag honestly.
 
 Paste a URL or a raw email (headers + body) and get back a 0–100 score, a
 plain verdict (`safe` / `suspicious` / `malicious`), the specific evidence
@@ -77,16 +78,37 @@ that produced it, and a MITRE ATT&CK tag.
   pip install scikit-learn
   python scripts/train_model.py
   ```
+- **Attachment parsing** (`app/signals/attachment_signals.py`) —
+  **metadata-only**: filename, declared extension, declared Content-Type.
+  This never inspects what's actually inside an attachment (no AV
+  scanning, no content sandboxing) — a wholly convincing-looking `.docx`
+  can still carry a malicious payload this won't catch, and the code says
+  so rather than implying more coverage than it has. What it does catch:
+  - **Dangerous extensions** — `.exe`, `.scr`, `.js`, `.hta`, `.ps1`,
+    `.iso`, and similar, directly executable on double-click.
+  - **Macro-enabled Office documents** — `.docm`/`.xlsm`/`.pptm` and
+    friends; a legitimate sender essentially never needs the macro-host
+    format when a plain `.docx`/`.xlsx` covers the same ground.
+  - **The double-extension trick** — `invoice.pdf.exe`, where the final
+    (real) extension is dangerous but an earlier, innocent-looking one
+    is there to catch a skimming eye.
+  - **Hidden-extension Unicode override** — a Right-to-Left Override
+    character (U+202E) embedded in the filename so the extension the OS
+    uses to run the file isn't the one displayed on screen.
+  - **Extension/Content-Type mismatch** — a `.pdf` sent with an
+    `application/x-msdownload` Content-Type, or similar: either the
+    extension or the declared type is lying.
+  Only runs on email checks (attachments don't apply to a bare URL), and
+  only ever tags T1566.001 when one of these actually fired — never as a
+  blanket label on every email.
 - **Scoring** (`app/scoring.py`) — a transparent, additive rules engine.
   No black box: every point on the score — local, threat-intel-sourced,
-  enrichment-sourced, or ML-calibrated — is traceable to a named signal
-  in the evidence list.
+  enrichment-sourced, attachment-sourced, or ML-calibrated — is traceable
+  to a named signal in the evidence list.
 - **MITRE mapping** (`app/mitre.py`) — tags results against T1566
-  (Phishing), T1566.002 (Spearphishing Link — now including confirmed
-  threat-intel hits and enrichment/ML findings), and T1598 (Phishing for
-  Information). T1566.001 (Spearphishing Attachment) is deliberately
-  never emitted — attachments aren't parsed yet, so claiming that mapping
-  would be dishonest.
+  (Phishing), T1566.001 (Spearphishing Attachment — Week 4), T1566.002
+  (Spearphishing Link — including confirmed threat-intel hits and
+  enrichment/ML findings), and T1598 (Phishing for Information).
 - **Demo UI** (`static/index.html`) — a single page that hits `/check` and
   renders the verdict card, MITRE tags, and evidence list.
 
@@ -125,8 +147,9 @@ in `app/main.py`). No restart trick needed beyond the normal one.
 
 No redirect-chain following, no real (receiving-server-side) SPF/DKIM/DMARC
 verification — those still rely on whatever `Authentication-Results`
-header the pasted email already carries. No attachment parsing yet, so
-T1566.001 still never fires. See the roadmap below.
+header the pasted email already carries. Attachment parsing is
+metadata-only (see above) — no AV scanning, no sandboxing, no macro/script
+content inspection. See the roadmap below.
 
 ## Running it
 
@@ -143,8 +166,9 @@ curl -X POST http://127.0.0.1:8000/check \
   -d '{"type": "url", "content": "https://paypa1-secure-login.top/verify"}'
 ```
 
-Two sample emails are in `sample_data/` — one phishing, one clean — used by
-the test suite and handy for manually poking the UI.
+Three sample emails are in `sample_data/` — phishing with a malicious link,
+phishing with a malicious attachment, and one clean — used by the test
+suite and handy for manually poking the UI.
 
 ## Testing
 
@@ -152,13 +176,16 @@ the test suite and handy for manually poking the UI.
 pytest -v
 ```
 
-57 tests. Threat-intel tests mock `requests` directly; enrichment tests
+70 tests. Threat-intel tests mock `requests` directly; enrichment tests
 mock `requests` (RDAP) and `socket`/`ssl` (TLS) the same way, including a
 dedicated test that the TLS client's SSRF guard actually refuses to
-connect when a host resolves only to a private address. None of them
-make a real network call, so the suite is safe and fast to run with or
-without API keys or `ENABLE_LIVE_ENRICHMENT` set, and can't accidentally
-burn your quota or probe a live host.
+connect when a host resolves only to a private address. Attachment tests
+build real MIME multipart messages with Python's own `email.mime` helpers
+(placeholder payloads only — no real executable/malware bytes anywhere in
+this repo) and round-trip them through the same parser the app uses. None
+of these make a real network call, so the suite is safe and fast to run
+with or without API keys or `ENABLE_LIVE_ENRICHMENT` set, and can't
+accidentally burn your quota or probe a live host.
 
 ## Project layout
 
@@ -166,12 +193,13 @@ burn your quota or probe a live host.
 app/
   main.py              FastAPI app — GET /, GET /health, POST /check; loads .env on startup
   models.py            Request/response schemas
-  scoring.py           Rules engine + threat-intel + enrichment + ML integration + verdict thresholds
+  scoring.py           Rules engine + threat-intel + enrichment + attachment + ML integration + verdict thresholds
   mitre.py             Signal → MITRE technique mapping
   signals/
-    url_signals.py      URL feature extraction
-    email_signals.py    Email header/body feature extraction + link extraction
-    brand_watchlist.py  Watched brands + typosquat distance check
+    url_signals.py       URL feature extraction
+    email_signals.py     Email header/body feature extraction + link extraction
+    brand_watchlist.py   Watched brands + typosquat distance check
+    attachment_signals.py Attachment metadata inspection (Week 4)
   threat_intel/
     base.py             ThreatIntelClient interface
     stub.py             Testing utility — always "no data"
@@ -196,7 +224,7 @@ scripts/
 static/
   index.html           Demo UI
 tests/                 pytest suite
-sample_data/           Sample phishing + legitimate emails
+sample_data/           Sample phishing (link + attachment) + legitimate emails
 ```
 
 ## Roadmap
@@ -208,7 +236,9 @@ sample_data/           Sample phishing + legitimate emails
    issuance-date checks.~~ **Done — Week 3.**
 3. ~~Add the logistic-regression scoring layer alongside the rules engine —
    not instead of it, so results stay explainable.~~ **Done — Week 3.**
-4. Attachment parsing, to finally earn the T1566.001 tag honestly.
+4. ~~Attachment parsing, to finally earn the T1566.001 tag honestly.~~
+   **Done — Week 4** (metadata-only — see above for exactly what that
+   does and doesn't cover).
 5. Package as a browser extension / Outlook add-in, and a webhook into
    Sentinel reusing the existing Logic App playbook pattern.
 6. The usual deliverable suite — GitHub README (this doubles as a start),

@@ -1,3 +1,6 @@
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
 
 from app.models import CheckType, Verdict
@@ -206,6 +209,51 @@ def test_ml_layer_skipped_entirely_with_no_positive_findings():
     )
     assert calls == []  # never invoked — nothing to calibrate on
     assert result.score == 0
+
+
+# --- Attachment parsing (Week 4): earning T1566.001 honestly ----------------
+
+def _email_with_dangerous_attachment() -> str:
+    msg = MIMEMultipart()
+    msg["From"] = "sender@example.com"
+    msg["Subject"] = "Invoice attached"
+    msg.attach(MIMEText("Please see the attached invoice.", "plain"))
+    part = MIMEBase("application", "octet-stream")
+    part.set_payload("placeholder, not a real executable")
+    part.add_header("Content-Disposition", "attachment", filename="invoice.pdf.exe")
+    msg.attach(part)
+    return msg.as_string()
+
+
+def test_dangerous_attachment_earns_t1566_001():
+    result = run_check(
+        CheckType.email,
+        _email_with_dangerous_attachment(),
+        threat_intel_clients=[],
+        enrichment_clients=[],
+    )
+    assert "T1566.001" in result.mitre_techniques
+    assert any(e.signal == "attachment-dangerous-extension" for e in result.evidence)
+    assert any(e.signal == "attachment-double-extension" for e in result.evidence)
+    assert result.score > 0
+
+
+def test_no_attachment_never_claims_t1566_001():
+    raw = (
+        "From: someone@example.com\nSubject: hi\n\n"
+        "Just a plain email with no attachment at all.\n"
+    )
+    result = run_check(CheckType.email, raw, threat_intel_clients=[], enrichment_clients=[])
+    assert "T1566.001" not in result.mitre_techniques
+
+
+def test_phishing_sample_still_never_claims_t1566_001():
+    # phishing_email_1.txt has no MIME attachment parts — it should keep
+    # scoring malicious on its existing signals without ever claiming an
+    # attachment technique it didn't actually check for.
+    raw = (SAMPLE_DIR / "phishing_email_1.txt").read_text()
+    result = run_check(CheckType.email, raw, threat_intel_clients=[], enrichment_clients=[])
+    assert "T1566.001" not in result.mitre_techniques
 
 
 def test_ml_layer_normalises_link_prefixed_and_threat_intel_signal_names():

@@ -24,9 +24,10 @@ app = FastAPI(
     description=(
         "Phishing & suspicious-link detector — rules engine + threat-intel lookups "
         "(Google Safe Browsing, VirusTotal, PhishTank) + optional live domain-age/TLS "
-        "enrichment + an explainable logistic-regression calibration layer."
+        "enrichment + an explainable logistic-regression calibration layer + "
+        "attachment parsing (metadata-only)."
     ),
-    version="0.3.0",
+    version="0.4.0",
 )
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

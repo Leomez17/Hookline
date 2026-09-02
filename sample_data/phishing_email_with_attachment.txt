@@ -1,0 +1,24 @@
+Content-Type: multipart/mixed; boundary="===============4804538314400279014=="
+MIME-Version: 1.0
+From: "HR Department" <hr@totally-legit-hr-portal.top>
+Subject: Updated Benefits Enrollment Form - Action Required
+Authentication-Results: mx.example.com; spf=fail smtp.mailfrom=totally-legit-hr-portal.top; dkim=fail; dmarc=fail
+
+--===============4804538314400279014==
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+
+RGVhciBFbXBsb3llZSwKCk9wZW4gZW5yb2xsbWVudCBjbG9zZXMgdG9kYXkuIFBsZWFzZSByZXZp
+ZXcgYW5kIGNvbXBsZXRlIHRoZSBhdHRhY2hlZApiZW5lZml0cyBlbnJvbGxtZW50IGZvcm0gaW1t
+ZWRpYXRlbHkgdG8gYXZvaWQgbG9zaW5nIHlvdXIgY292ZXJhZ2UuCgpUaGlzIHJlcXVpcmVzIHVy
+Z2VudCBhY3Rpb24g4oCUIHRoZSBmb3JtIG11c3QgYmUgc3VibWl0dGVkIGJlZm9yZSBlbmQgb2Yg
+ZGF5LgoKSFIgRGVwYXJ0bWVudAo=
+
+--===============4804538314400279014==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Disposition: attachment; filename="Benefits_Enrollment_Form.pdf.exe"
+
+placeholder payload -- not a real executable, for detection-testing purposes only
+--===============4804538314400279014==--

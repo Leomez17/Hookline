@@ -1,9 +1,10 @@
 """The scorer. Local rules stay fully explainable; threat-intel results
-(Week 2) and live enrichment + a logistic-regression calibration layer
-(Week 3) all layer on top the same way — every point on the score, no
-matter which stage produced it, is still traceable to a named signal in
-the evidence list. Nothing here replaces the rules engine; it's additive
-findings sources feeding the same additive score.
+(Week 2), live enrichment + a logistic-regression calibration layer
+(Week 3), and attachment parsing (Week 4) all layer on top the same way —
+every point on the score, no matter which stage produced it, is still
+traceable to a named signal in the evidence list. Nothing here replaces
+the rules engine; it's additive findings sources feeding the same
+additive score.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from app.ml import model as ml_model
 from app.ml.features import feature_key
 from app.mitre import techniques_for
 from app.models import CheckResponse, CheckType, Evidence, Verdict
+from app.signals.attachment_signals import extract_attachment_features
 from app.signals.email_signals import extract_email_features, extract_links
 from app.signals.url_signals import extract_url_features
 from app.threat_intel.base import ThreatIntelClient
@@ -121,6 +123,7 @@ def run_check(
             findings += _enrichment_findings(enrichers, content.strip())
     else:
         findings = extract_email_features(content)
+        findings += extract_attachment_features(content)
         for link in extract_links(content, limit=THREAT_INTEL_LINK_CAP):
             findings += _threat_intel_findings(clients, link)
         for link in extract_links(content, limit=ENRICHMENT_LINK_CAP):

@@ -1,9 +1,12 @@
 """Maps triggered signals to MITRE ATT&CK techniques.
 
-Kept to the four techniques scoped in the concept brief. T1566.001
-(Spearphishing Attachment) is deliberately never emitted yet — Week 1
-doesn't parse attachments, so claiming that mapping would be dishonest.
-That's a named Phase 2 gap, not an oversight.
+T1566.001 (Spearphishing Attachment) was deliberately never emitted
+through Week 3 — nothing parsed attachments, so claiming that mapping
+would have been dishonest. Week 4 adds app/signals/attachment_signals.py
+and, with it, T1566.001 — but only when an attachment finding actually
+fired, never as a blanket tag on every email check. Same honesty rule as
+everywhere else in this file: a technique is only claimed when a specific
+signal earned it.
 """
 from __future__ import annotations
 
@@ -16,6 +19,13 @@ SENDER_SPOOFING_SIGNALS = {
     "spf-fail", "dkim-fail", "dmarc-fail",
 }
 CREDENTIAL_HARVESTING_SIGNALS = {"urgency-language"}
+ATTACHMENT_SIGNALS = {
+    "attachment-dangerous-extension",
+    "attachment-macro-enabled-document",
+    "attachment-double-extension",
+    "attachment-hidden-extension-unicode-override",
+    "attachment-extension-content-type-mismatch",
+}
 
 
 def techniques_for(check_type: CheckType, signal_names: List[str], score: int) -> List[str]:
@@ -37,6 +47,8 @@ def techniques_for(check_type: CheckType, signal_names: List[str], score: int) -
             techniques.add("T1566")  # Phishing (parent) — no dedicated spoofing sub-technique in scope
         if bare in CREDENTIAL_HARVESTING_SIGNALS:
             techniques.add("T1598")  # Phishing for Information
+        if bare in ATTACHMENT_SIGNALS:
+            techniques.add("T1566.001")  # Spearphishing Attachment
 
     if techniques and "T1566" not in techniques and not any(t.startswith("T1566.") for t in techniques):
         techniques.add("T1566")
