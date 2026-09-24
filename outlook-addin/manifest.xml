@@ -13,7 +13,7 @@
   <DisplayName DefaultValue="Hookline"/>
   <Description DefaultValue="Phishing &amp; suspicious-link detector for the open email, powered by your local Hookline instance."/>
   <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png"/>
-  <HighResIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
+  <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
   <SupportUrl DefaultValue="https://github.com/Leomez17/Hookline"/>
   <AppDomains>
     <AppDomain>https://localhost:3000</AppDomain>
