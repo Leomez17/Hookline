@@ -12,8 +12,8 @@ from typing import List
 
 from app.threat_intel.base import ThreatIntelClient
 from app.threat_intel.cache import CachedThreatIntelClient, TTLCache
-from app.threat_intel.phishtank import PhishTankClient
 from app.threat_intel.safe_browsing import SafeBrowsingClient
+from app.threat_intel.urlhaus import URLhausClient
 from app.threat_intel.virustotal import VirusTotalClient
 
 _cache = TTLCache()
@@ -23,6 +23,6 @@ def build_threat_intel_clients() -> List[ThreatIntelClient]:
     raw_clients = [
         ("safe-browsing", SafeBrowsingClient(os.environ.get("GOOGLE_SAFE_BROWSING_API_KEY"))),
         ("virustotal", VirusTotalClient(os.environ.get("VIRUSTOTAL_API_KEY"))),
-        ("phishtank", PhishTankClient(os.environ.get("PHISHTANK_API_KEY"))),
+        ("urlhaus", URLhausClient(os.environ.get("URLHAUS_AUTH_KEY"))),
     ]
     return [CachedThreatIntelClient(client, name=name, cache=_cache) for name, client in raw_clients]

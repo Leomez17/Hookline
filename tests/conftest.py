@@ -31,7 +31,8 @@ _ENV_VARS_TO_ISOLATE = [
     "ENABLE_LIVE_ENRICHMENT",
     "GOOGLE_SAFE_BROWSING_API_KEY",
     "VIRUSTOTAL_API_KEY",
-    "PHISHTANK_API_KEY",
+    "URLHAUS_AUTH_KEY",
+    "PHISHTANK_API_KEY",  # legacy -- still cleared in case an old .env has it
 ]
 
 

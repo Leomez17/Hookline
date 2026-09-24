@@ -7,7 +7,7 @@ inside an email body is prefixed "link:" by app/signals/email_signals.py
 (e.g. "link:typosquat") and needs that prefix stripped to match the bare
 feature the model was trained on; and a threat-intel hit from any of the
 three sources ("ti:safe-browsing:hit", "ti:virustotal:hit",
-"ti:phishtank:hit") collapses to one shared "ti-hit" feature, because for
+"ti:urlhaus:hit") collapses to one shared "ti-hit" feature, because for
 calibration purposes a confirmed hit from any one source carries the same
 weight — there isn't enough labeled data to justify three separate
 per-source coefficients.

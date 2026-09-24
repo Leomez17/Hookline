@@ -2,7 +2,7 @@
 
 This keeps the app honest — it never fabricates a threat-intel hit — while
 proving out the exact seam Phase 2 real clients (Safe Browsing, VirusTotal,
-PhishTank) will plug into. See app/threat_intel/base.py.
+URLhaus) will plug into. See app/threat_intel/base.py.
 """
 from __future__ import annotations
 

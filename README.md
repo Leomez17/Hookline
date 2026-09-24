@@ -28,7 +28,7 @@ that produced it, and a MITRE ATT&CK tag.
   urgency/credential-harvesting language scoring, and it runs the URL
   checks above against every link found in the body.
 - **Threat-intel lookups** (`app/threat_intel/`) — real clients for
-  **Google Safe Browsing**, **VirusTotal**, and **PhishTank**, each behind
+  **Google Safe Browsing**, **VirusTotal**, and **URLhaus**, each behind
   the same `ThreatIntelClient` interface Week 1 defined. Every one is
   independently optional: with no key configured, that source reports
   "not configured" rather than failing or being silently skipped — you
@@ -150,8 +150,12 @@ Then fill in whichever of these you want live:
   at https://www.virustotal.com/gui/join-us, then copy your key from
   https://www.virustotal.com/gui/my-apikey. This client only reads
   existing reports — it never submits a new scan, to avoid burning quota.
-- **PhishTank** — free, maintained by Cisco Talos. Register and generate
-  an app key at https://phishtank.net.
+- **URLhaus** (abuse.ch) — free, community-run list of URLs distributing
+  malware. Get a free Auth-Key at https://auth.abuse.ch/ and set
+  `URLHAUS_AUTH_KEY`. Note it tracks malware-distribution URLs rather
+  than credential-phishing pages, so "not listed" means exactly that.
+  This replaced PhishTank, which closed new-user registration in
+  September 2026 — see `app/threat_intel/urlhaus.py`.
 - **`ENABLE_LIVE_ENRICHMENT`** — set to `true` to turn on the RDAP
   domain-age and TLS certificate checks. No signup needed (RDAP is a free,
   keyless public protocol), but this is the one feature that connects
@@ -236,7 +240,7 @@ app/
     cache.py             24h TTL cache wrapper
     safe_browsing.py     Google Safe Browsing v4 client
     virustotal.py        VirusTotal v3 client (read-only, no scan submission)
-    phishtank.py          PhishTank client
+    urlhaus.py            URLhaus (abuse.ch) client — replaced PhishTank
   enrichment/
     base.py             EnrichmentClient interface
     provider.py          Builds the RDAP + TLS client set, gated on ENABLE_LIVE_ENRICHMENT
@@ -260,7 +264,7 @@ sample_data/           Sample phishing (link + attachment) + legitimate emails
 
 ## Roadmap
 
-1. ~~Wire in Safe Browsing, VirusTotal, and PhishTank behind
+1. ~~Wire in Safe Browsing, VirusTotal, and PhishTank (since swapped for URLhaus) behind
    `ThreatIntelClient`, with response caching so free-tier rate limits
    hold up.~~ **Done — Week 2.**
 2. ~~Add live WHOIS/RDAP lookups for domain age, and TLS certificate

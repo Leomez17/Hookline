@@ -3,7 +3,7 @@
 Both RDAP and TLS checks are gated behind a single ENABLE_LIVE_ENRICHMENT
 flag, off by default. That's a different default from the threat-intel
 sources in app/threat_intel/, which just skip themselves silently with no
-key configured: those only ever talk to Google/VirusTotal/PhishTank.
+key configured: those only ever talk to Google/VirusTotal/URLhaus.
 Live enrichment, by contrast, actively connects out to whatever host a
 user — or an attacker crafting the input — supplies, so it needs an
 explicit opt-in rather than an implicit one. See tls_client.py's own SSRF

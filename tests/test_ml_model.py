@@ -59,7 +59,7 @@ def test_feature_key_strips_link_prefix():
 def test_feature_key_collapses_threat_intel_hits():
     assert feature_key("ti:safe-browsing:hit") == "ti-hit"
     assert feature_key("ti:virustotal:hit") == "ti-hit"
-    assert feature_key("ti:phishtank:hit") == "ti-hit"
+    assert feature_key("ti:urlhaus:hit") == "ti-hit"
 
 
 def test_feature_key_leaves_threat_intel_non_hits_alone():
